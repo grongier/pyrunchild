@@ -5,6 +5,10 @@
 import os
 import textwrap
 from collections import OrderedDict
+import numpy as np
+from scipy import stats
+
+from pyrunchild.time_series import MixtureModel, MemoryModel, LinearTimeSeries, FloodplainTimeSeries
 
 ################################################################################
 # Miscellaneous
@@ -24,7 +28,10 @@ def divide_line(string,
 
 class ChildWriter(object):
     
-    def __init__(self, base_directory, preset_parameters=True):
+    def __init__(self, base_directory, preset_parameters=True, seed=None):
+
+        if seed is not None:
+            np.random.seed(seed)
 
         self.base_directory = base_directory
         os.makedirs(self.base_directory, exist_ok=True)
@@ -62,57 +69,55 @@ class ChildWriter(object):
         
         parameter_descriptions = dict()
         # Run control
-        parameter_descriptions['OUTFILENAME'] = 'name of the run'
-        parameter_descriptions['RUNTIME'] = 'Duration of run (years)'
-        parameter_descriptions['OPINTRVL'] = 'Output interval (years)'
-        parameter_descriptions['SEED'] = 'Random seed used to generate storm sequence & mesh, etc (as applicable)'
-        parameter_descriptions['FSEED'] = 'seed for random number generation'
+        parameter_descriptions['OUTFILENAME'] = 'Base name for output files'
+        parameter_descriptions['RUNTIME'] = '(yr) Duration of run'
+        parameter_descriptions['OPINTRVL'] = '(yr) Frequency of output to files'
+        parameter_descriptions['SEED'] = 'Seed for random number generation. Must be an integer'
+        parameter_descriptions['FSEED'] = 'Seed for random number generation. Must be an integer'
         # Mesh setup
-        parameter_descriptions['OPTREADINPUT'] = 'Option for defining the mesh: 10. Create rectangular offset mesh; 1. Read mesh from input data files; 12. Create mesh from a list of (x,y,z,b) points; 3. Create random mesh from ArcGrid ascii output; 4. Create hexagonal mesh from ArcGrid ascii output; 5. Use point tiles and masked ascii ArcGrid'
-        parameter_descriptions['OPTINITMESHDENS'] = 'no. of densifying iterations applied to initial mesh (0=none)'
-        parameter_descriptions['X_GRID_SIZE'] = '''"length" of grid, meters'''
-        parameter_descriptions['Y_GRID_SIZE'] = '''"width" of grid, meters'''
-        parameter_descriptions['OPT_PT_PLACE'] = 'type of point placement; 0=uniform, 1=perturbed unif., 2=random'
+        parameter_descriptions['OPTREADINPUT'] = 'Option for initial mesh input or generation. Options include creating a mesh from scratch (10), reading an existing mesh (1), reading in a set of (x,y,z,b) points (where b is a boundary code) (12), and reading from an ArcInfo grid (3 or 4). If OPTREADINPUT=10, additional required parameters are X GRID_SIZE, Y GRID_SIZE, OPT_PT_PLACE, GRID_SPACING. If OPTREADINPUT=1, additional required parameters are INPUTDATAFILE, INPUTTIME, and OPTINITMESHDENS. If OPTREADINPUT=12, the parameter POINTFILENAME must also be included'
+        parameter_descriptions['OPTINITMESHDENS'] = 'Option for densifying the initial mesh by inserting a new node at the circumcenter of each triangle. The value of this parameter is the number of successive densification passes (for example, if 2, then the mesh is densified twice)'
+        parameter_descriptions['X_GRID_SIZE'] = '(m) Total length of model domain in x direction'
+        parameter_descriptions['Y_GRID_SIZE'] = '(m) Total length of model domain in y direction'
+        parameter_descriptions['OPT_PT_PLACE'] = 'Method of placing points when generating a new mesh: 0 = uniform hexagonal mesh; 1 = regular staggered (hexagonal) mesh with small random offsets in (x, y) positions; 2 = random placement'
         parameter_descriptions['GRID_SPACING'] = 'mean distance between grid nodes, meters'
-        parameter_descriptions['NUM_PTS'] = 'for random grid, number of points to place'
-        parameter_descriptions['INPUTDATAFILE'] = 'name of file to read input data from (only if reading mesh)'
-        parameter_descriptions['INPUTTIME'] = 'the time which you want data from (needed only if reading mesh)'
-        parameter_descriptions['OPTREADLAYER'] = 'option to read layer information from file (only if reading mesh)'
-        parameter_descriptions['POINTFILENAME'] = 'name of file containing x,y,z,b data (b=boundary status)'
-        parameter_descriptions['ARCGRIDFILENAME'] = 'make irregular mesh from regular Arc grid'
+        parameter_descriptions['NUM_PTS'] = 'Number of points in grid interior, if random point positions are used'
+        parameter_descriptions['INPUTDATAFILE'] = 'Base name of files from which input data will be read, if option for reading input from a previous run is selected'
+        parameter_descriptions['INPUTTIME'] = 'Time for which to read input, when re-starting from a previous run'
+        parameter_descriptions['OPTREADLAYER'] = 'Option for reading layers from input file when generating new mesh. If set to zero, each node will be assigned a single bedrock layer and a single regolith layer, with thicknesses determined by REGINIT and BEDROCKDEPTH'
+        parameter_descriptions['POINTFILENAME'] = 'Name of file containing (x,y,z,b) values for a series of points. Used when OPTREADINPUT = 2'
+        parameter_descriptions['ARCGRIDFILENAME'] = 'Name of ascii file in ArcInfo format containing initial DEM'
         parameter_descriptions['TILE_INPUT_PATH'] = 'make irregular mesh from point tiles (files of x,y,z coords) for node coordinates and a regular Arc grid for masking a custom area'
         parameter_descriptions['OPT_TILES_OR_SINGLE_FILE'] = ''
         parameter_descriptions['LOWER_LEFT_EASTING'] = ''
         parameter_descriptions['LOWER_LEFT_NORTHING'] = ''
         parameter_descriptions['NUM_TILES_EAST'] = ''
         parameter_descriptions['NUM_TILES_NORTH'] = ''
-        parameter_descriptions['OPTMESHADAPTDZ'] = 'dynamic adaptive meshing based on erosion rates'
+        parameter_descriptions['OPTMESHADAPTDZ'] = 'If adaptive re-meshing is used, this option tells the model to add nodes at locations where the local volumetric erosion rate exceeds MESHADAPT_MAXNODEFLUX'
         parameter_descriptions['MESHADAPT_MAXNODEFLUX'] = 'For dynamic point addition: max ero flux rate'
-        parameter_descriptions['OPTMESHADAPTAREA'] = 'dynamic adaptive meshing based on drainage area'
-        parameter_descriptions['MESHADAPTAREA_MINAREA'] = 'Dr area threshold for densifying mesh'
-        parameter_descriptions['MESHADAPTAREA_MAXVAREA'] = 'Max voronoi area for nodes above threshold' 
+        parameter_descriptions['OPTMESHADAPTAREA'] = 'Option for increasing mesh density around areas of large drainage area'
+        parameter_descriptions['MESHADAPTAREA_MINAREA'] = 'For dynamic re-meshing based on drainage area: minimum drainage area for adaptive re-meshing'
+        parameter_descriptions['MESHADAPTAREA_MAXVAREA'] = 'For dynamic re-meshing based on drainagearea: maximum Voronoi area for nodes meeting the minimum area criterion' 
         # Boundaries
-        parameter_descriptions['TYP_BOUND'] = 'open boundary;0=corner,1=side,2= sides,3=4 sides,4=specify'
+        parameter_descriptions['TYP_BOUND'] = 'Configuration of boundaries with a rectangular mesh: 0 = open boundary in one corner; 1 = open boundary along x = 0; 2 = open boundaries along x = 0 and x = xmax; 3 = open boundaries along all four sides; 4 = single open boundary node at specified coordinates'
         parameter_descriptions['NUMBER_OUTLETS'] = ''
-        parameter_descriptions['OUTLET_X_COORD'] = 'x-coordinate of single outlet, if specified'
-        parameter_descriptions['OUTLET_Y_COORD'] = 'y-coordinate of single outlet, if specified'
-        parameter_descriptions['MEAN_ELEV'] = 'mean initial elevation, m'
-        parameter_descriptions['RAND_ELEV'] = 'max amplitude of random noise applied to initial topography, m'
-        parameter_descriptions['SLOPED_SURF'] = 'Option for sloping initial surface'
-        parameter_descriptions['UPPER_BOUND_Z'] = 'elevation along upper boundary, m'
-        parameter_descriptions['OPTINLET'] = '1=add an "inlet" discharge boundary condition (0=none)'
-        parameter_descriptions['INDRAREA'] = 'inlet drainage area'
-        parameter_descriptions['INSEDLOAD'] = 'sediment influx at inlet'
-        parameter_descriptions['INSEDLOAD1'] = 'sediment influx at inlet, size class 1'
-        parameter_descriptions['INSEDLOAD2'] = 'sediment influx at inlet, size class 2'
-        parameter_descriptions['INLET_X'] = 'x location of inlet'
-        parameter_descriptions['INLET_Y'] = 'y location of inlet'
-        parameter_descriptions['INLET_OPTCALCSEDFEED'] = 'if inlet, do we specify or calc sed influx?'
-        parameter_descriptions['INLET_SLOPE'] = 'if calc sed flux, what slope to use?'
+        parameter_descriptions['OUTLET_X_COORD'] = '(m) x coordinate of single-node outlet (open boundary)'
+        parameter_descriptions['OUTLET_Y_COORD'] = '(m) y coordinate of single-node outlet (open boundary)'
+        parameter_descriptions['MEAN_ELEV'] = '(m) Mean elevation of initial surface'
+        parameter_descriptions['RAND_ELEV'] = '(m) Maximum amplitude of random variations in initial node elevations'
+        parameter_descriptions['SLOPED_SURF'] = 'Option for initial sloping surface (downward toward y = 0)'
+        parameter_descriptions['UPPER_BOUND_Z'] = '(m) If sloping initial surface is applied, this sets the slope by setting the altitude of the model edge at y = ymax'
+        parameter_descriptions['OPTINLET'] = 'Option for an external water and sediment input at an inlet point'
+        parameter_descriptions['INDRAREA'] = '(m2) For runs with an inlet: drainage area of inlet stream'
+        parameter_descriptions['INSEDLOADi'] = '(m3/yr) For runs with an inlet and specified sediment influx: input sediment discharge of size fraction i'
+        parameter_descriptions['INLET_X'] = '(m) For runs with an inlet: x position of the inlet'
+        parameter_descriptions['INLET_Y'] = '(m) For runs with an inlet: y position of the inlet'
+        parameter_descriptions['INLET_OPTCALCSEDFEED'] = 'For runs with an inlet: option for calculating sediment input at inlet based on specified slope (INLETSLOPE) and bed grain-size distribution'
+        parameter_descriptions['INLET_SLOPE'] = 'For runs with an inlet: if option for calculating rather than specifying sediment discharge is chosen, this is the slope that is used to calculate sediment discharge'
         # Bedrock and regolith
-        parameter_descriptions['BEDROCKDEPTH'] = 'initial depth of bedrock (make this arbitrarily large)'
-        parameter_descriptions['REGINIT'] = 'initial regolith thickness'
-        parameter_descriptions['MAXREGDEPTH'] = '''maximum depth of a single regolith layer (also "active layer")'''
+        parameter_descriptions['BEDROCKDEPTH'] = '(m) Starting thickness of bedrock layer'
+        parameter_descriptions['REGINIT'] = '(m) Starting thickness of regolith layer'
+        parameter_descriptions['MAXREGDEPTH'] = '(m) Depth of active layer, and maximum thickness of a deposited layer'
         # Lithology
         parameter_descriptions['OPT_READ_LAYFILE'] = 'start with an existing .lay file'
         parameter_descriptions['INPUT_LAY_FILE'] = '.lay file'
@@ -122,55 +127,55 @@ class ChildWriter(object):
         parameter_descriptions['ERODYFILE_NAME'] = 'Erodibility file'
         parameter_descriptions['OPT_NEW_LAYERSINPUT'] = 'Hack: make layers input backwards compatible for simulations without bulk density'
         # Layers
-        parameter_descriptions['OPTLAYEROUTPUT'] = 'Option for writing out layer information'
+        parameter_descriptions['OPTLAYEROUTPUT'] = 'Option for output of layer data'
         parameter_descriptions['OPT_NEW_LAYERSOUTPUT'] = 'Hack: make backward compatible for sims without bulk density'
-        parameter_descriptions['OPTINTERPLAYER'] = 'for node moving, do we care about tracking the layers? yes=1'
+        parameter_descriptions['OPTINTERPLAYER'] = 'Option for layer interpolation when points are moved or added'
         # Stratigraphic grid
-        parameter_descriptions['OPTSTRATGRID'] = 'option for tracking stratigraphy in underlying regular grid'
-        parameter_descriptions['XCORNER'] = 'x (m) lower left corner'
-        parameter_descriptions['YCORNER'] = 'y (m) lower left corner'
-        parameter_descriptions['GRIDDX'] = 'distance (m) between the tStratGrid nodes, ideally these should be close or slightly smaller than the width of the main channel'
-        parameter_descriptions['GR_WIDTH'] = 'width (m) of the floodplain valley'
-        parameter_descriptions['GR_LENGTH'] = 'length(m) of the floodplain valley, parallel to the axis of the river'
-        parameter_descriptions['SG_MAXREGDEPTH'] = '''maximum depth of a single regolith layer (also "active layer")'''
+        parameter_descriptions['OPTSTRATGRID'] = 'Option for tracking stratigraphy using subjacent raster grid (only relevant when meandering and floodplain modules are activated; see Clevis et al., 2006b)'
+        parameter_descriptions['XCORNER'] = 'Corner of stratigraphy grid in StratGrid module'
+        parameter_descriptions['YCORNER'] = 'Corner of stratigraphy grid in StratGrid module'
+        parameter_descriptions['GRIDDX'] = '(m) Grid spacing for StratGrid module'
+        parameter_descriptions['GR_WIDTH'] = '(m) Stratigraphy grid width in StratGrid module'
+        parameter_descriptions['GR_LENGTH'] = '(m) Stratigraphy grid length in StratGrid module'
+        parameter_descriptions['SG_MAXREGDEPTH'] = '(m) Layer thickness in StratGrid module'
         # Tectonics and baselevel
         parameter_descriptions['OPTNOUPLIFT'] = 'Option to turn off uplift (default to false)'
-        parameter_descriptions['UPTYPE'] = 'type of uplift (0=none, 1=uniform, 2=block, etc)'
-        parameter_descriptions['UPDUR'] = 'duration of uplift (yrs)'
-        parameter_descriptions['UPRATE'] = 'uplift rate (m/yr)'
-        parameter_descriptions['FAULTPOS'] = 'Fault position (m) (does not apply to all uplift functions)'
-        parameter_descriptions['SUBSRATE'] = ''
-        parameter_descriptions['SLIPRATE'] = ''
+        parameter_descriptions['UPTYPE'] = 'Type of uplift/baselevel change to be applied: 0 = None; 1 = Spatially and temporally uniform uplift; 2 = Uniform uplift at Y >= fault location, zero elsewhere; 3 = Block uplift with strike-slip motion along given Y coord; 4 = Propagating fold modeled w/ simple error function curve; 5 = 2D cosine-based uplift-subsidence pattern; 6 = Block, fault, and foreland sinusoidal fold; 7 = Two-sided differential uplift; 8 = Fault bend fold; 9 = Back-tilting normal fault block; 10 = Linear change in uplift rate; 11 = Power law change in uplift rate in the y-direction; 12 = Uplift rate maps in separate files; 13 = Propagating horizontal front; 14 = Baselevel fall at open boundaries; 15 = Moving block; 16 = Moving sinusoid; 17 = Uplift with crustal thickening; 18 = Uplift and whole-landscape tilting; 19 = Migrating Gaussian bump'
+        parameter_descriptions['UPDUR'] = '(yr) Duration of uplift / baselevel change'
+        parameter_descriptions['UPRATE'] = '(m/yr) Rate parameter for uplift routines (usage differs among different uplift functions)'
+        parameter_descriptions['FAULTPOS'] = '(m) y location of a fault perpendicular to the x-axis'
+        parameter_descriptions['SUBSRATE'] = '(m/yr) Subsidence rate (used for some uplift functions)'
+        parameter_descriptions['SLIPRATE'] = '(m/yr) Tectonic parameter: rate of strike-slip motion (option 3), dip-slip motion (option 8)'
         parameter_descriptions['SS_OPT_WRAP_BOUNDARIES'] = ''
         parameter_descriptions['SS_BUFFER_WIDTH'] = ''
-        parameter_descriptions['FOLDPROPRATE'] = ''
-        parameter_descriptions['FOLDWAVELEN'] = ''
-        parameter_descriptions['TIGHTENINGRATE'] = ''
-        parameter_descriptions['ANTICLINEXCOORD'] = ''
-        parameter_descriptions['ANTICLINEYCOORD'] = ''
-        parameter_descriptions['YFOLDINGSTART'] = ''
-        parameter_descriptions['UPSUBRATIO'] = ''
-        parameter_descriptions['FOLDLATRATE'] = ''
-        parameter_descriptions['FOLDUPRATE'] = ''
-        parameter_descriptions['FOLDPOSITION'] = ''
-        parameter_descriptions['BLFALL_UPPER'] = 'rate of baselevel fall at upper boundary, if appl. (m/yr)'
-        parameter_descriptions['BLDIVIDINGLINE'] = ''
-        parameter_descriptions['FLATDEPTH'] = ''
-        parameter_descriptions['RAMPDIP'] = ''
-        parameter_descriptions['KINKDIP'] = ''
+        parameter_descriptions['FOLDPROPRATE'] = '(m/yr) Uplift option 4: propagation rate of a fold'
+        parameter_descriptions['FOLDWAVELEN'] = '(m) Uplift options 4, 5, 6: fold wavelength'
+        parameter_descriptions['TIGHTENINGRATE'] = 'Uplift option 5: rate at which fold tightens'
+        parameter_descriptions['ANTICLINEXCOORD'] = '(m) Uplift option 5: xcoordinate of anticline crest'
+        parameter_descriptions['ANTICLINEYCOORD'] = '(m) Uplift option 5: ycoordinate of anticline crest'
+        parameter_descriptions['YFOLDINGSTART'] = '(yr) Uplift option 5: starting time of fold deformation'
+        parameter_descriptions['UPSUBRATIO'] = 'Uplift option 5: uplift-subsidence ratio'
+        parameter_descriptions['FOLDLATRATE'] = 'Uplift option 6: lateral propagation rate of fold'
+        parameter_descriptions['FOLDUPRATE'] = '(m/yr) Uplift option 6: uplift rate of fold axis'
+        parameter_descriptions['FOLDPOSITION'] = '(m) Uplift option 6: position coordinate for fold'
+        parameter_descriptions['BLFALL_UPPER'] = '(m/yr) Uplift option 7: rate of baselevel fall at upper (y=ymax) boundary'
+        parameter_descriptions['BLDIVIDINGLINE'] = '''(m) Uplift option 7: ycoordinate that separates the two zones of baselevel fall. Open boundary nodes with y greater than this value are given the "upper" rate'''
+        parameter_descriptions['FLATDEPTH'] = '(m) Uplift option 8: depth to flat portion of fault plane'
+        parameter_descriptions['RAMPDIP'] = 'Uplift option 8: dip of fault ramp'
+        parameter_descriptions['KINKDIP'] = 'Uplift option 8: dip of fault kink in fault-bend fold model'
         parameter_descriptions['UPPERKINKDIP'] = ''
-        parameter_descriptions['ACCEL_REL_UPTIME'] = ''
-        parameter_descriptions['VERTICAL_THROW'] = ''
-        parameter_descriptions['FAULT_PIVOT_DISTANCE'] = ''
-        parameter_descriptions['MINIMUM_UPRATE'] = ''
-        parameter_descriptions['OPT_INCREASE_TO_FRONT'] = ''
-        parameter_descriptions['DECAY_PARAM_UPLIFT'] = ''
-        parameter_descriptions['NUMUPLIFTMAPS'] = 'number of uplift-rate maps to read'
-        parameter_descriptions['UPMAPFILENAME'] = 'base name for files containing uplift-rate maps'
-        parameter_descriptions['UPTIMEFILENAME'] = 'name of file containing times corresponding to uplift maps'
-        parameter_descriptions['FRONT_PROP_RATE'] = ''
-        parameter_descriptions['UPLIFT_FRONT_GRADIENT'] = ''
-        parameter_descriptions['STARTING_YCOORD'] = ''
+        parameter_descriptions['ACCEL_REL_UPTIME'] = 'Uplift option 9: fraction of total time that fault motion has been accelerated'
+        parameter_descriptions['VERTICAL_THROW'] = '(m) Uplift option 9: total fault throw'
+        parameter_descriptions['FAULT_PIVOT_DISTANCE'] = '(m) Uplift option 9: distance from normal fault to pivot point'
+        parameter_descriptions['MINIMUM_UPRATE'] = '(m/yr) Uplift option 10: minimum uplift rate'
+        parameter_descriptions['OPT_INCREASE_TO_FRONT'] = 'Uplift option 10: option for having uplift rate increase (rather than decrease) toward y = 0'
+        parameter_descriptions['DECAY_PARAM_UPLIFT'] = 'Uplift option 11: decay parameter for power-law uplift function'
+        parameter_descriptions['NUMUPLIFTMAPS'] = 'Uplift option 12: number of uplift rate maps to read from file'
+        parameter_descriptions['UPMAPFILENAME'] = 'Uplift option 12: base name of files containing uplift rate fields'
+        parameter_descriptions['UPTIMEFILENAME'] = 'Uplift option 12: name of file containing times corresponding to each uplift rate map'
+        parameter_descriptions['FRONT_PROP_RATE'] = '(m/yr) Uplift option 13: rate of horizontal propagation of deformation front'
+        parameter_descriptions['UPLIFT_FRONT_GRADIENT'] = 'Uplift option 13: this defines the azimuth of the uplift front. If zero, the front is parallel to the x-axis. If positive, it angles away from the open boundary (if there is one). The idea is that this captures (crudely) the north-to-south propagation of wedge growth in Taiwan'
+        parameter_descriptions['STARTING_YCOORD'] = '(m) Uplift option 13: y coordinate at which propagating deformation front starts'
         parameter_descriptions['BLOCKEDGEPOSX'] = ''
         parameter_descriptions['BLOCKWIDTHX'] = ''
         parameter_descriptions['BLOCKEDGEPOSY'] = ''
@@ -184,101 +189,100 @@ class ChildWriter(object):
         parameter_descriptions['BUMP_WAVELENGTH'] = ''
         parameter_descriptions['OPT_INITIAL_BUMP'] = ''
         # Rainfall
-        parameter_descriptions['OPTVAR'] = 'Option for rainfall variation'
-        parameter_descriptions['ST_PMEAN'] = 'Mean rainfall intensity (m/yr) (16.4 m/yr = Atlanta, GA)'
-        parameter_descriptions['ST_STDUR'] = 'Mean storm duration (yr) (Denver July = 0.00057yrs = 5 hrs)'
-        parameter_descriptions['ST_ISTDUR'] = 'Mean time between storms (yr) (Denver July = 0.01yr = 88hrs)'
+        parameter_descriptions['OPTVAR'] = 'Option for random rainfall variation'
+        parameter_descriptions['ST_PMEAN'] = '(m/yr) Mean storm rainfall intensity (16.4 m/yr = Atlanta, GA)'
+        parameter_descriptions['ST_STDUR'] = '(yr) Mean storm duration (Denver July = 0.00057yrs = 5 hrs)'
+        parameter_descriptions['ST_ISTDUR'] = '(yr) Mean time between storms (Denver July = 0.01yr = 88hrs)'
         parameter_descriptions['ST_OPTSINVAR'] = 'option for sinusoidal variations'
-        parameter_descriptions['OPTSINVARINFILT'] = 'option for sinusoidal variations in infiltration capacity'
+        parameter_descriptions['OPTSINVARINFILT'] = 'Option for sinusoidal variations through time in soil in- filtration capacity'
         # Runoff and infiltration
-        parameter_descriptions['FLOWGEN'] = '''Option for flow generation: 0. Hortonian (uniform infilt-excess runoff); 1. Saturated flow 1 (sat-excess runoff w/ return flow); 2. Saturated flow 2 (sat-excess runoff w/o return flow); 3. Constant soil store ("bucket"-type flow generation); 4. 2D kinematic wave (2D steady kinematic wave multi-flow); 5. Hydrograph peak method; 6 Subsurface 2D kinematic wave (kinematic wave with Darcy's Law)'''
-        parameter_descriptions['TRANSMISSIVITY'] = 'for shallow subsurface flow option (if FLOWGEN=1 or 2)'
+        parameter_descriptions['FLOWGEN'] = '''Runoff generation option: 0. Hortonian (uniform infilt-excess runoff); 1. Saturated flow 1 (sat-excess runoff w/ return flow); 2. Saturated flow 2 (sat-excess runoff w/o return flow); 3. Constant soil store ("bucket"-type flow generation); 4. 2D kinematic wave (2D steady kinematic wave multi-flow); 5. Hydrograph peak method; 6 Subsurface 2D kinematic wave (kinematic wave with Darcy's Law)'''
+        parameter_descriptions['TRANSMISSIVITY'] = '(m2/yr) For subsurface flow options: soil hydraulic transmissivity.'
         parameter_descriptions['OPTVAR_TRANSMISSIVITY'] = ''
-        parameter_descriptions['INFILTRATION'] = 'infiltration capacity (for Hortonian option) (m/yr)'
+        parameter_descriptions['INFILTRATION'] = '(Ic, m/yr) Soil infiltration capacity'
         parameter_descriptions['OPTSINVARINFILT'] = ''
-        parameter_descriptions['PERIOD_INFILT'] = '(if OPTSINVARINFILT=1)'
-        parameter_descriptions['MAXICMEAN'] = '(if OPTSINVARINFILT=1)'
-        parameter_descriptions['SOILSTORE'] = '(if FLOWGEN=3)'
-        parameter_descriptions['KINWAVE_HQEXP'] = 'Depth-disch exponent for kinematic wave routing (if FLOWGEN=4)'
-        parameter_descriptions['FLOWVELOCITY'] = '(if FLOWGEN=5)'
-        parameter_descriptions['HYDROSHAPEFAC'] = '(if FLOWGEN=5)'
-        parameter_descriptions['LAKEFILL'] = 'fill lakes if = 1'
+        parameter_descriptions['PERIOD_INFILT'] = '(yr) Period for sinusoidal variations in soil infiltration capacity'
+        parameter_descriptions['MAXICMEAN'] = 'Maximum value of sinusoidally varying soil infiltration capacity'
+        parameter_descriptions['SOILSTORE'] = '''(m) For "bucket" hydrology sub-model: soil water storage capacity'''
+        parameter_descriptions['KINWAVE_HQEXP'] = 'For kinematic wave water-routing module: exponent on depth-discharge relationship'
+        parameter_descriptions['FLOWVELOCITY'] = 'For peak hydrograph method of flow calculation: speed of channel flow (used to compute travel time; see Solyom and Tucker, 2004)'
+        parameter_descriptions['HYDROSHAPEFAC'] = 'For hydrograph peak flow-calculation method: hydrograph shape factor (see Solyom and Tucker, 2004)'
+        parameter_descriptions['LAKEFILL'] = 'Option for computing inundated area and drainage pathways in closed depressions (see Tucker et al.,  2001b). If not selected, any water entering a closed depression is assumed to evaporate'
         # Hydraulic geometry
-        parameter_descriptions['CHAN_GEOM_MODEL'] = 'Option for channel width closure: 1. Regime theory (empirical power-law scaling); 2. Parker-Paola self-formed channel theory; 3. Finnegan slope-dependent channel width model'
-        parameter_descriptions['HYDR_WID_COEFF_DS'] = 'coeff. on downstream hydraulic width relation (m/(m3/s)^exp)'
-        parameter_descriptions['HYDR_WID_EXP_DS'] = 'exponent on downstream hydraulic width relation'
-        parameter_descriptions['HYDR_WID_EXP_STN'] = 'exp. on at-a-station hydraulic width relation'
-        parameter_descriptions['HYDR_DEP_COEFF_DS'] = 'coeff. on downstream hydraulic depth relation (m/(m3/s)^exp)'
-        parameter_descriptions['HYDR_DEP_EXP_DS'] = 'exponent on downstream hydraulic depth relation'
-        parameter_descriptions['HYDR_DEP_EXP_STN'] = 'exp. on at-a-station hydraulic depth relation'
-        parameter_descriptions['HYDR_ROUGH_COEFF_DS'] = 'coeff. on downstrm hydraulic roughness (manning n)'
-        parameter_descriptions['HYDR_ROUGH_EXP_DS'] = 'exp. on downstream hydraulic roughness'
-        parameter_descriptions['HYDR_ROUGH_EXP_STN'] = 'exp on at-a-station hydr. rough.'
-        parameter_descriptions['THETAC'] = 'Critical shields stress'
-        parameter_descriptions['SHEAR_RATIO'] = 'Parker-Paola constant (tau/taucrit ratio)'
-        parameter_descriptions['BANK_ROUGH_COEFF'] = 'coeff. on downstream bank roughness (for meand only)'
-        parameter_descriptions['BANK_ROUGH_EXP'] = 'exp downstream bank roughness (for meand only)'
-        parameter_descriptions['BANKFULLEVENT'] = 'precipitation rate of a bankfull event, in m/s'
+        parameter_descriptions['CHAN_GEOM_MODEL'] = 'Type of channel geometry model to be used. Option 1 is standard empirical hydraulic geometry. Other options are experimental: 1. Regime theory (empirical power-law scaling); 2. Parker-Paola self-formed channel theory; 3. Finnegan slope-dependent channel width model'
+        parameter_descriptions['HYDR_WID_COEFF_DS'] = 'Coefficient in bankfull width-discharge relation'
+        parameter_descriptions['HYDR_WID_EXP_DS'] = 'Exponent in bankfull width-discharge relation'
+        parameter_descriptions['HYDR_WID_EXP_STN'] = 'Exponent in at-a-station width-discharge relation'
+        parameter_descriptions['HYDR_DEP_COEFF_DS'] = 'Coefficient in bankfull depth-discharge relation'
+        parameter_descriptions['HYDR_DEP_EXP_DS'] = 'Exponent in bankfull depth-discharge relation'
+        parameter_descriptions['HYDR_DEP_EXP_STN'] = 'Exponent in at-a-station depth-discharge relation'
+        parameter_descriptions['HYDR_ROUGH_COEFF_DS'] = 'Coefficient in bankfull roughness-discharge relation'
+        parameter_descriptions['HYDR_ROUGH_EXP_DS'] = 'Exponent in bankfull roughness-discharge relation'
+        parameter_descriptions['HYDR_ROUGH_EXP_STN'] = 'Exponent in at-a-station roughness-discharge relation'
+        parameter_descriptions['HYDR_SLOPE_EXP'] = ''
+        parameter_descriptions['THETAC'] = '''For "Parker" channel geometry option: critical Shields stress'''
+        parameter_descriptions['SHEAR_RATIO'] = '''For "Parker" channel geometry option: ratio of actual to threshold shear stress'''
+        parameter_descriptions['BANK_ROUGH_COEFF'] = 'Coefficient in bank roughness-discharge relation'
+        parameter_descriptions['BANK_ROUGH_EXP'] = 'Exponent in bank roughness-discharge relation'
+        parameter_descriptions['BANKFULLEVENT'] = 'Runoff rate associated with bankfull flood event. Used to compute hydraulic geometry'
         # Meandering
-        parameter_descriptions['OPTMEANDER'] = 'Option for meandering'
-        parameter_descriptions['CRITICAL_AREA'] = 'minimum area for which we calculate meandering (m2)'
-        parameter_descriptions['CRITICAL_FLOW'] = 'minimum flow for which we calculate meandering (m3/yr)'
-        parameter_descriptions['OPT_VAR_SIZE'] = 'option for varying grain size, yes = 1, no = 0'
-        parameter_descriptions['MEDIAN_DIAMETER'] = 'median grain diameter (m)'
-        parameter_descriptions['BANKERO'] = 'Bank erodibility coefficient (m3/N/yr)'
-        parameter_descriptions['BNKHTDEP'] = 'dependence of bank erodibility on bank height, P, 0<=P<=1'
-        parameter_descriptions['DEF_CHAN_DISCR'] = 'default channel discretization for meandering channels (widths)'
-        parameter_descriptions['FRAC_WID_MOVE'] = 'maximum fraction of width node allowed to move in a step'
-        parameter_descriptions['FRAC_WID_ADD'] = 'how far channel moves before adding new node behind it'
+        parameter_descriptions['OPTMEANDER'] = 'Option for stream meandering'
+        parameter_descriptions['CRITICAL_AREA'] = '(m2) Minimum drainage area for a meandering channel in stream meander module'
+        parameter_descriptions['CRITICAL_FLOW'] = '(m3/yr) Minimum flow for which we calculate meandering in stream meander module'
+        parameter_descriptions['OPT_VAR_SIZE'] = 'Flag that indicates use of multiple grain sizes in stream meander module'
+        parameter_descriptions['MEDIAN_DIAMETER'] = '(m) Median bed-sediment diameter for use in meander module'
+        parameter_descriptions['BANKERO'] = 'Stream meander module: stream-bank erodibility coefficient'
+        parameter_descriptions['BNKHTDEP'] = 'Stream meander module: degree to which bank erosion rate depends on bank height (0 to 1)'
+        parameter_descriptions['DEF_CHAN_DISCR'] = '(m) Default channel node spacing in meander module'
+        parameter_descriptions['FRAC_WID_MOVE'] = 'Stream meander module: maximum distance that a meandering channel point can migrate in one time step, in channel widths'
+        parameter_descriptions['FRAC_WID_ADD'] = 'Stream meander module: maximum distance of a meandering channel point from a bank point, in channel widths. If exceeded, a new node is added'
         # Materials
         parameter_descriptions['ROCKDENSITYINIT'] = 'initial rock bulk density (kg/m3)'
         parameter_descriptions['SOILBULKDENSITY'] = 'bulk density of soil (constant) (kg/m3)'
         parameter_descriptions['WOODDENSITY'] = 'density of wood (kg/m3)'
         # Grain size
-        parameter_descriptions['NUMGRNSIZE'] = 'number of grain size classes'
-        parameter_descriptions['REGPROPORTION1'] = 'proportion of sediments of grain size diam1 in regolith [.]'
-        parameter_descriptions['BRPROPORTION1'] = 'proportion of sediments of grain size diam1 in bedrock [.]'
-        parameter_descriptions['GRAINDIAM1'] = 'representative diameter of first grain size class [m]'
-        parameter_descriptions['REGPROPORTION2'] = 'proportion of sediments of grain size diam2 in regolith [.]'
-        parameter_descriptions['BRPROPORTION2'] = 'proportion of sediments of grain size diam2 in bedrock [.]'
-        parameter_descriptions['GRAINDIAM2'] = 'representative diameter of second grain size class [m]'
-        parameter_descriptions['HIDINGEXP'] = 'hiding/protrusion exponent for multiple grain sizes'
+        parameter_descriptions['NUMGRNSIZE'] = 'Number of grain size classes used in run. Must be consistent with selected sediment transport law'
+        parameter_descriptions['BRPROPORTIONi'] = 'Volumetric proportion of grain-size fraction i generated from eroded bedrock. Enter one per size fraction, starting with 1'
+        parameter_descriptions['REGPROPORTIONi'] = 'Initial volumetric proportion of size i in regolith layers. Must specify one value for each grain size class. The range is zero to one'
+        parameter_descriptions['GRAINDIAMi'] = '(Di, m) Diameter of grain size class i. There must be a value corresponding to each grain-size class used in the run. For example, a run with two grain-size classes must have GRAINDIAM1 and GRAINDIAM2'
+        parameter_descriptions['HIDINGEXP'] = 'Exponent in equation for correcting critical shear stress to account for protrusion and hiding when multiple grain-size fractions are present on the bed'
         parameter_descriptions['GRAINDIAM0'] = 'representative d50 grain size (if NUMGRNSIZE=1) [m]'  
         # Fluvial transport
         parameter_descriptions['OPTNOFLUVIAL'] = 'Option to turn off fluvial processes (default to false)'
-        parameter_descriptions['DETACHMENT_LAW'] = 'detachment capacity law to use (0, 1, 2 ...)'
-        parameter_descriptions['TRANSPORT_LAW'] = 'transport capacity law to use (0, 1, 2 ...)'
-        parameter_descriptions['KF'] = 'sediment transport efficiency factor (dims vary but incls conversion s->y)'
-        parameter_descriptions['MF'] = 'sediment transport capacity discharge exponent'
-        parameter_descriptions['NF'] = 'sed transport capacity slope exponent (ND)'
-        parameter_descriptions['PF'] = 'excess shear stress (sic) exponent'
-        parameter_descriptions['KB'] = 'bedrock erodibility coefficient (dimensions in m, kg, yr)'
-        parameter_descriptions['KR'] = 'regolith erodibility coefficient (dimensions same as KB)'
-        parameter_descriptions['KT'] = 'Shear stress (or stream power) coefficient (in SI units)'
-        parameter_descriptions['MB'] = 'bedrock erodibility specific (not total!) discharge exponent'
-        parameter_descriptions['NB'] = 'bedrock erodibility slope exponent'
-        parameter_descriptions['PB'] = 'Exponent on excess erosion capacity (e.g., excess shear stress)'
-        parameter_descriptions['TAUCR'] = 'critical shear stress for detachment-limited-erosion (kg/m/s^2)'
-        parameter_descriptions['TAUCB'] = 'critical shear stress for detachment-limited-erosion (kg/m/s^2)'
-        parameter_descriptions['BETA'] = 'fraction sed to bedload (for F(Qs) rules only)'
+        parameter_descriptions['DETACHMENT_LAW'] = 'Code for detachment-capacity law to be applied: 0 = power law, form 1; 1 = power law, form 2; 2 = almost parabolic law; 3 = generalized f(Qs) detachment-rule; 4 = dummy law for no fluvial erosion'
+        parameter_descriptions['KB'] = 'Erodibility coefficient for bedrock. If layers are read in from a previous run, values from layer file are used instead'
+        parameter_descriptions['KR'] = 'Erodibility coefficient for regolith. If layers are read in from a previous run, values from layer file are used instead'
+        parameter_descriptions['KT'] = '(Pa per (m2/s)M, where M is Mb for detachment and Mf for sediment transport) Coefficient relating shear stress to discharge and slope. Can be calculated from water density, gravitational acceleration, and roughness; see, e.g., Tucker and Slingerland (1997)'
+        parameter_descriptions['MB'] = 'Discharge exponent in detachment capacity equation'
+        parameter_descriptions['NB'] = 'Slope exponent in detachment capacity equation'
+        parameter_descriptions['PB'] = 'Excess power/shear exponent in detachment capacity equation'
+        parameter_descriptions['TAUCB'] = '(normally Pa) Detachment threshold for bedrock'
+        parameter_descriptions['TAUCR'] = '(normally Pa) Detachment threshold for regolith'
+        parameter_descriptions['BETA'] = 'Fraction of eroded sediment that forms bed load. Applies only to sediment-flux-dependent detachment laws'
+        parameter_descriptions['OPTDETACHLIM'] = 'Option for detachment-limited fluvial erosion only'
+        parameter_descriptions['TRANSPORT_LAW'] = 'Code for fluvial transport capacity law to be applied: 0 = power-law transport formula; 1 = power-law transport formula, form 2; 2 = Bridge-Dominic form of Bagnold bedload formula; 3 = Wilcock sand-gravel formula; 4 = multi-size power-law formula; 5 = Willgoose/Riley mine tailings formula; 6 = ultra-simplified power-law transport formula; 7 = dummy law for no fluvial transport'
+        parameter_descriptions['KF'] = 'Fluvial sediment transport efficiency coefficient'
+        parameter_descriptions['MF'] = 'Discharge exponent in fluvial transport capacity equation'
+        parameter_descriptions['NF'] = 'Slope exponent in fluvial transport capacity equation'
+        parameter_descriptions['PF'] = 'Excess power/shear exponent in fluvial transport capacity equation'
         # Overbank deposition
-        parameter_descriptions['OPTFLOODPLAIN'] = 'option for overbank deposition using modified Howard 1992 model'
-        parameter_descriptions['FP_DRAREAMIN'] = 'minimum drainage area for a "flood node"'
-        parameter_descriptions['FP_BANKFULLEVENT'] = 'threshold for rainfall to generate overbank deposition'
-        parameter_descriptions['FP_MU'] = 'deposition rate per unit depth at distance = 0'
-        parameter_descriptions['FP_LAMBDA'] = 'decay distance'
-        parameter_descriptions['FP_OPTCONTROLCHAN'] = 'option for controlling channel elevation as boundary cond'
-        parameter_descriptions['FP_VALDROP'] = 'height drop between the top and bottom of the main valley (m)'
-        parameter_descriptions['FP_INLET_ELEVATION'] = 'elevation at head of channel reach (inlet)'
+        parameter_descriptions['OPTFLOODPLAIN'] = 'Option for floodplain over-bank deposition'
+        parameter_descriptions['FP_DRAREAMIN'] = '''(m2) In floodplain module, the minimum drainage area that defines a "major" channel that is subject to overbank flooding and sedimentation'''
+        parameter_descriptions['FP_BANKFULLEVENT'] = '(m/yr) In floodplain module, the minimum runoff rate required to generate a flood'
+        parameter_descriptions['FP_MU'] = '(μ, m/yr) In floodplain module, the rate coefficient for overbank sedimentation (see Clevis et al., 2006a)'
+        parameter_descriptions['FP_LAMBDA'] = '(λ, m) In floodplain module, the distance decay coefficient for sedimentation rate (e-folding length for sedimentation rate as a function of distance from the main channel)'
+        parameter_descriptions['FP_OPTCONTROLCHAN'] = 'When the floodplain module is used, setting this option tells the model to drive the altitude of the main channel as a boundary condition.  See Clevis et al. (2006a)'
+        parameter_descriptions['FP_VALDROP'] = '(m) In floodplain module, the difference in altitude of the main channel between its inlet and its exit point'
+        parameter_descriptions['FP_INLET_ELEVATION'] = '(m) In floodplain module, the altitude of the inlet of the main channel'
         # Hillslope transport
         parameter_descriptions['OPTNODIFFUSION'] = 'Option to turn off diffusive processes (default to false)'
-        parameter_descriptions['KD'] = 'diffusivity coef (m2/yr)'
-        parameter_descriptions['OPTDIFFDEP'] = 'if =1 then diffusion only erodes, never deposits'
-        parameter_descriptions['DIFFUSIONTHRESHOLD'] = 'Diffusion occurs only at areas < difThresh. For F(Qs) models; switched off if 0'
-        parameter_descriptions['OPT_NONLINEAR_DIFFUSION'] = 'Option for using non-linear diffusion'
+        parameter_descriptions['KD'] = '(m2/yr) Hillslope diffusivity coefficient'
+        parameter_descriptions['OPTDIFFDEP'] = 'Option to deactivate deposition by hillslope diffusion'
+        parameter_descriptions['DIFFUSIONTHRESHOLD'] = 'When this parameter is greater than zero, it is the drainage area above which slope-dependent (“diffusive”) creep transport no longer takes place. Designed for use with sediment-flux-dependent transport functions; see Gasparini et al. (2007)'
+        parameter_descriptions['OPT_NONLINEAR_DIFFUSION'] = 'Option for nonlinear diffusion model of soil creep'
         parameter_descriptions['OPT_DEPTH_DEPENDENT_DIFFUSION'] = 'Option for depth dependent creep transport'
         parameter_descriptions['DIFFDEPTHSCALE'] = 'depth scale for depth-dependent diffusion'
-        parameter_descriptions['CRITICAL_SLOPE'] = 'critical gradient for nonlinear diffusion'
+        parameter_descriptions['CRITICAL_SLOPE'] = 'Threshold slope gradient for nonlinear creep law'
         # Landsliding
         parameter_descriptions['OPT_LANDSLIDES'] = 'Option for landsliding'
         parameter_descriptions['OPT_3D_LANDSLIDES'] = 'Option for determining which landslide function to use'
@@ -288,7 +292,7 @@ class ChildWriter(object):
         parameter_descriptions['DF_DEPOSITION_RULE'] = 'set deposition rules'
         # Eolian
         parameter_descriptions['OPTLOESSDEP'] = 'space-time uniform surface accumulation of sediment (loess)'
-        parameter_descriptions['LOESS_DEP_RATE'] = 'deposition rate'
+        parameter_descriptions['LOESS_DEP_RATE'] = '(m/yr) Rate of accumulation of aeolian sediment across the landscape'
         # Chemical and physical weathering
         parameter_descriptions['CHEM_WEATHERING_LAW'] = 'possible values 0-1: 0 = None; 1 = Dissolution'
         parameter_descriptions['MAXDISSOLUTIONRATE'] = 'maximum dissolution rate (kg/m3/yr)'
@@ -299,7 +303,7 @@ class ChildWriter(object):
         parameter_descriptions['SOILPRODRATESLOPE'] = 'density-dependent soil production rate slope ( (m/yr)/(kg/m3) )'
         parameter_descriptions['SOILPRODDEPTH'] = 'depth scale for soil production rate (m)'
         # Vegetation
-        parameter_descriptions['OPTVEG'] = 'option for dynamic vegetation growth and erosion'
+        parameter_descriptions['OPTVEG'] = 'Option for dynamic vegetation layer (see Collins et al., 2004)'
         parameter_descriptions['OPTGRASS_SIMPLE'] = 'option for simple grass'
         parameter_descriptions['VEG_KVD'] = 'Vegetation erosion coefficient (dims LT/M)'
         parameter_descriptions['VEG_TV'] = 'Vegetation regrowth time scale (years)'
@@ -335,10 +339,9 @@ class ChildWriter(object):
         parameter_descriptions['IFRDUR'] = 'Mean time between fires'
         parameter_descriptions['OPTRANDOMFIRES'] = 'random fires'
         # Various options
-        parameter_descriptions['OPTDETACHLIM'] = 'Option for detachment-limited erosion only'
-        parameter_descriptions['OPTTSOUTPUT'] = 'option for writing mean erosion rates, etc, at each time step'
+        parameter_descriptions['OPTTSOUTPUT'] = 'Option for output of quantities at each storm (time step)'
         parameter_descriptions['TSOPINTRVL'] = 'not currently operational'
-        parameter_descriptions['SURFER'] = 'optional output for Surfer graphics'
+        parameter_descriptions['SURFER'] = 'Option for output in a Surfer-compatible data format'
         parameter_descriptions['OPTEXPOSURETIME'] = 'option for tracking surface-layer exposure ages'
         parameter_descriptions['OPTFOLDDENS'] = 'Option for mesh densification around a growing fold'
         parameter_descriptions['OPT_TRACK_WATER_SED_TIMESERIES'] = 'Option to record timeseries Q and Qs'
@@ -439,9 +442,7 @@ class ChildWriter(object):
                        UPPER_BOUND_Z=0,
                        OPTINLET=0,
                        INDRAREA='n/a',
-                       INSEDLOAD='n/a',
-                       INSEDLOAD1='n/a',
-                       INSEDLOAD2='n/a',
+                       INSEDLOADi=(0, 0, 0, 0, 0, 0, 0, 0, 0),
                        INLET_X='n/a',
                        INLET_Y='n/a',
                        INLET_OPTCALCSEDFEED='n/a',
@@ -457,9 +458,8 @@ class ChildWriter(object):
         self.parameter_values['UPPER_BOUND_Z'] = UPPER_BOUND_Z
         self.parameter_values['OPTINLET'] = OPTINLET
         self.parameter_values['INDRAREA'] = INDRAREA
-        self.parameter_values['INSEDLOAD'] = INSEDLOAD
-        self.parameter_values['INSEDLOAD1'] = INSEDLOAD1
-        self.parameter_values['INSEDLOAD2'] = INSEDLOAD2
+        for i, in_sed_load in enumerate(INSEDLOADi):
+            self.parameter_values['INSEDLOAD' + str(i + 1)] = in_sed_load
         self.parameter_values['INLET_X'] = INLET_X
         self.parameter_values['INLET_Y'] = INLET_Y
         self.parameter_values['INLET_OPTCALCSEDFEED'] = INLET_OPTCALCSEDFEED
@@ -569,7 +569,31 @@ class ChildWriter(object):
                       BUMP_AMPLITUDE='n/a',
                       BUMP_WAVELENGTH='n/a',
                       OPT_INITIAL_BUMP=0):
-        
+        ''' Set the parameters for tectonics
+
+        @param OPTNOUPLIFT: Option to turn off tectonics (default to false)
+        @param UPTYPE: Code for the type of uplift to be applied:
+                       0. None
+                       1. Spatially and temporally uniform uplift
+                       2. Uniform uplift at Y >= fault location, zero elsewhere
+                       3. Block uplift with strike-slip motion along given Y coord
+                       4. Propagating fold modeled w/ simple error function curve
+                       5. 2D cosine-based uplift-subsidence pattern
+                       6. Block, fault, and foreland sinusoidal fold
+                       7. Two-sided differential uplift
+                       8. Fault bend fold
+                       9. Back-tilting normal fault block
+                       10. Linear change in uplift rate
+                       11. Power law change in uplift rate in the y-direction
+                       12. Uplift rate maps in separate files
+                       13. Propagating horizontal front
+                       14. Baselevel fall at open boundaries
+                       15. Moving block
+                       16. Moving sinusoid
+                       17. Uplift with crustal thickening
+                       18. Uplift and whole-landscape tilting
+                       19. Migrating Gaussian bump
+        '''
         self.parameter_values['OPTNOUPLIFT'] = OPTNOUPLIFT
         self.parameter_values['UPTYPE'] = UPTYPE
         self.parameter_values['UPDUR'] = UPDUR
@@ -620,9 +644,9 @@ class ChildWriter(object):
         self.parameter_values['BUMP_WAVELENGTH'] = BUMP_WAVELENGTH
         self.parameter_values['OPT_INITIAL_BUMP'] = OPT_INITIAL_BUMP
         
-    def set_constant_uplift(self,
-                            UPRATE=0.001,
-                            UPDUR=10000000):
+    def set_uniform_uplift(self,
+                           UPRATE=0.001,
+                           UPDUR=10000000):
         
         self.parameter_values['OPTNOUPLIFT'] = 0
         self.parameter_values['UPTYPE'] = 1
@@ -724,12 +748,37 @@ class ChildWriter(object):
                                HYDR_ROUGH_COEFF_DS=0.03,
                                HYDR_ROUGH_EXP_DS=0,
                                HYDR_ROUGH_EXP_STN=0,
+                               HYDR_SLOPE_EXP=0,
                                THETAC=0.045,
                                SHEAR_RATIO=1.1,
                                BANK_ROUGH_COEFF=15.0,
                                BANK_ROUGH_EXP=0.80,
                                BANKFULLEVENT=10):
-        
+        ''' Set the hydraulic geometry
+
+        @param CHAN_GEOM_MODEL: Type of channel geometry model to be used:
+                                0. standard empirical hydraulic geometry
+                                1. Regime theory (empirical power-law scaling) [experimental]
+                                2. Parker-Paola self-formed channel theory [experimental]
+                                3. Finnegan slope-dependent channel width model [experimental]
+        @param HYDR_WID_COEFF_DS: Coefficient in bankfull width-discharge relation
+        @param HYDR_WID_EXP_DS: Exponent in bankfull width-discharge relatio
+        @param HYDR_WID_EXP_STN: Exponent in at-a-station width-discharge relation
+        @param HYDR_DEP_COEFF_DS: Coefficient in bankfull depth-discharge relation
+        @param HYDR_DEP_EXP_DS: Exponent in bankfull depth-discharge relation
+        @param HYDR_DEP_EXP_STN: Exponent in at-a-station depth-discharge relation
+        @param HYDR_ROUGH_COEFF_DS: Coefficient in bankfull roughness-discharge relation
+        @param HYDR_ROUGH_EXP_DS: Exponent in bankfull roughness-discharge relation
+        @param HYDR_ROUGH_EXP_STN: Exponent in at-a-station roughness-discharge relation
+        @param HYDR_SLOPE_EXP:
+        @param THETAC: For "Parker" channel geometry option: critical Shields stress
+        @param SHEAR_RATIO: For "Parker" channel geometry option: ratio of 
+                            actual to threshold shear stress
+        @param BANK_ROUGH_COEFF: Coefficient in bank roughness-discharge relation
+        @param BANK_ROUGH_EXP: Exponent in bank roughness-discharge relation
+        @param BANKFULLEVENT: Runoff rate associated with bankfull flood event.
+                              Used to compute hydraulic geometry
+        '''
         self.parameter_values['CHAN_GEOM_MODEL'] = CHAN_GEOM_MODEL
         self.parameter_values['HYDR_WID_COEFF_DS'] = HYDR_WID_COEFF_DS
         self.parameter_values['HYDR_WID_EXP_DS'] = HYDR_WID_EXP_DS
@@ -740,6 +789,7 @@ class ChildWriter(object):
         self.parameter_values['HYDR_ROUGH_COEFF_DS'] = HYDR_ROUGH_COEFF_DS
         self.parameter_values['HYDR_ROUGH_EXP_DS'] = HYDR_ROUGH_EXP_DS
         self.parameter_values['HYDR_ROUGH_EXP_STN'] = HYDR_ROUGH_EXP_STN
+        self.parameter_values['HYDR_SLOPE_EXP'] = HYDR_SLOPE_EXP
         self.parameter_values['THETAC'] = THETAC
         self.parameter_values['SHEAR_RATIO'] = SHEAR_RATIO
         self.parameter_values['BANK_ROUGH_COEFF'] = BANK_ROUGH_COEFF
@@ -749,7 +799,7 @@ class ChildWriter(object):
     def set_meandering(self,
                        OPTMEANDER=0,
                        CRITICAL_AREA=1e8,
-                       CRITICAL_FLOW=1e8,
+                       # CRITICAL_FLOW=1e8,
                        OPT_VAR_SIZE=0,
                        MEDIAN_DIAMETER=0.0007,
                        BANKERO=0,
@@ -760,7 +810,7 @@ class ChildWriter(object):
         
         self.parameter_values['OPTMEANDER'] = OPTMEANDER
         self.parameter_values['CRITICAL_AREA'] = CRITICAL_AREA
-        self.parameter_values['CRITICAL_FLOW'] = CRITICAL_FLOW
+        # self.parameter_values['CRITICAL_FLOW'] = CRITICAL_FLOW
         self.parameter_values['OPT_VAR_SIZE'] = OPT_VAR_SIZE
         self.parameter_values['MEDIAN_DIAMETER'] = MEDIAN_DIAMETER
         self.parameter_values['BANKERO'] = BANKERO
@@ -780,59 +830,190 @@ class ChildWriter(object):
         
     def set_grainsize(self,
                       NUMGRNSIZE=1,
-                      REGPROPORTION1=1.,
-                      BRPROPORTION1=1.,
-                      GRAINDIAM1=0.001,
-                      REGPROPORTION2=0.,
-                      BRPROPORTION2=0.,
-                      GRAINDIAM2=0.05,
+                      BRPROPORTIONi=(1, 0, 0, 0, 0, 0, 0, 0, 0),
+                      REGPROPORTIONi=(1, 0, 0, 0, 0, 0, 0, 0, 0),
+                      GRAINDIAMi=(0.001, 0, 0, 0, 0, 0, 0, 0, 0),
                       HIDINGEXP=0.75,
                       GRAINDIAM0=0.007):
         
         self.parameter_values['NUMGRNSIZE'] = NUMGRNSIZE
-        self.parameter_values['REGPROPORTION1'] = REGPROPORTION1
-        self.parameter_values['BRPROPORTION1'] = BRPROPORTION1
-        self.parameter_values['GRAINDIAM1'] = GRAINDIAM1
-        self.parameter_values['REGPROPORTION2'] = REGPROPORTION2
-        self.parameter_values['BRPROPORTION2'] = BRPROPORTION2
-        self.parameter_values['GRAINDIAM2'] = GRAINDIAM2
+        for i, br_proportion in enumerate(BRPROPORTIONi):
+            self.parameter_values['BRPROPORTION' + str(i + 1)] = br_proportion
+        for i, reg_proportion in enumerate(REGPROPORTIONi):
+            self.parameter_values['REGPROPORTION' + str(i + 1)] = reg_proportion
+        for i, grain_diam in enumerate(GRAINDIAMi):
+            self.parameter_values['GRAINDIAM' + str(i + 1)] = grain_diam
         self.parameter_values['HIDINGEXP'] = HIDINGEXP
         self.parameter_values['GRAINDIAM0'] = GRAINDIAM0
-        
+
     def set_fluvial_transport(self,
                               OPTNOFLUVIAL=0,
                               DETACHMENT_LAW=1,
-                              TRANSPORT_LAW=1,
-                              KF=617.,
-                              MF=0.66667,
-                              NF=0.66667,
-                              PF=1.5,
                               KB=0.0005,
                               KR=0.0005,
                               KT=1000.,
                               MB=0.66667,
                               NB=0.66667,
                               PB=1.5,
-                              TAUCR=30,
                               TAUCB=30,
-                              BETA=1):
-        
+                              TAUCR=30,
+                              BETA=1,
+                              OPTDETACHLIM=0,
+                              TRANSPORT_LAW=1,
+                              KF=617.,
+                              MF=0.66667,
+                              NF=0.66667,
+                              PF=1.5):
+        ''' Set the parameters for fluvial erosion and deposition
+
+        @param OPTNOFLUVIAL: Option to turn off fluvial processes (default to false)
+        @param DETACHMENT_LAW: Code for detachment-capacity law to be applied: 
+                               0. Power law, form 1
+                               1. Power law, form 2
+                               2. Almost parabolic law
+                               3. Generalized f(Qs) detachment-rule
+                               4. Dummy law for no fluvial erosion
+        @param KB: Erodibility coefficient for bedrock. If layers are read in
+                   from a previous run, values from layer file are used instead
+        @param KR: Erodibility coefficient for regolith. If layers are read in
+                   from a previous run, values from layer file are used instead
+        @param KT: (Pa per (m2/s)M, where M is Mb for detachment and Mf for
+                    sediment transport) Coefficient relating shear stress to
+                    discharge and slope. Can be calculated from water density,
+                    gravitational acceleration, and roughness; see, e.g., Tucker
+                    and Slingerland (1997)
+        @param MB: Discharge exponent in detachment capacity equation
+        @param NB: Slope exponent in detachment capacity equation
+        @param PB: Excess power/shear exponent in detachment capacity equation
+        @param TAUCB: (normally Pa) Detachment threshold for bedrock
+        @param TAUCR: (normally Pa) Detachment threshold for regolith
+        @param BETA: Fraction of eroded sediment that forms bed load. Applies
+                     only to sediment-flux-dependent detachment laws
+        @param OPTDETACHLIM: Option for detachment-limited fluvial erosion only
+        @param TRANSPORT_LAW: Code for fluvial transport capacity law to be applied:
+                              0. Power-law transport formula
+                              1. Power-law transport formula, form 2
+                              2. Bridge-Dominic form of Bagnold bedload formula
+                              3. Wilcock sand-gravel formula
+                              4. Multi-size power-law formula
+                              5. Willgoose/Riley mine tailings formula
+                              6. Ultra-simplified power-law transport formula
+                              7. Dummy law for no fluvial transport
+        @param KF: Fluvial sediment transport efficiency coefficient
+        @param MF: Discharge exponent in fluvial transport capacity equation
+        @param NF: Slope exponent in fluvial transport capacity equation
+        @param PF: Excess power/shear exponent in fluvial transport capacity equation
+        '''
         self.parameter_values['OPTNOFLUVIAL'] = OPTNOFLUVIAL
         self.parameter_values['DETACHMENT_LAW'] = DETACHMENT_LAW
-        self.parameter_values['TRANSPORT_LAW'] = TRANSPORT_LAW
-        self.parameter_values['KF'] = KF
-        self.parameter_values['MF'] = MF
-        self.parameter_values['NF'] = NF
-        self.parameter_values['PF'] = PF
         self.parameter_values['KB'] = KB
         self.parameter_values['KR'] = KR
         self.parameter_values['KT'] = KT
         self.parameter_values['MB'] = MB
         self.parameter_values['NB'] = NB
         self.parameter_values['PB'] = PB
-        self.parameter_values['TAUCR'] = TAUCR
         self.parameter_values['TAUCB'] = TAUCB
+        self.parameter_values['TAUCR'] = TAUCR
         self.parameter_values['BETA'] = BETA
+        self.parameter_values['OPTDETACHLIM'] = OPTDETACHLIM
+        self.parameter_values['TRANSPORT_LAW'] = TRANSPORT_LAW
+        self.parameter_values['KF'] = KF
+        self.parameter_values['MF'] = MF
+        self.parameter_values['NF'] = NF
+        self.parameter_values['PF'] = PF
+
+    def set_detachment_power_law_form_1(self,
+                                        KB=0.0005,
+                                        KR=0.0005,
+                                        KT=1000.,
+                                        MB=0.66667,
+                                        NB=0.66667,
+                                        PB=1.5,
+                                        TAUCB=30,
+                                        TAUCR=30):
+        
+        self.parameter_values['OPTNOFLUVIAL'] = 0
+        self.parameter_values['DETACHMENT_LAW'] = 0
+        self.parameter_values['KB'] = KB
+        self.parameter_values['KR'] = KR
+        self.parameter_values['KT'] = KT
+        self.parameter_values['MB'] = MB
+        self.parameter_values['NB'] = NB
+        self.parameter_values['PB'] = PB
+        self.parameter_values['TAUCB'] = TAUCB
+        self.parameter_values['TAUCR'] = TAUCR
+
+    def set_detachment_power_law_form_2(self,
+                                        KB=0.0005,
+                                        KR=0.0005,
+                                        KT=1000.,
+                                        MB=0.66667,
+                                        NB=0.66667,
+                                        PB=1.5,
+                                        TAUCB=30,
+                                        TAUCR=30):
+        
+        self.parameter_values['OPTNOFLUVIAL'] = 0
+        self.parameter_values['DETACHMENT_LAW'] = 1
+        self.parameter_values['KB'] = KB
+        self.parameter_values['KR'] = KR
+        self.parameter_values['KT'] = KT
+        self.parameter_values['MB'] = MB
+        self.parameter_values['NB'] = NB
+        self.parameter_values['PB'] = PB
+        self.parameter_values['TAUCB'] = TAUCB
+        self.parameter_values['TAUCR'] = TAUCR
+
+    def set_detachment_almost_parabolic_law(self,
+                                            KB=1e-4,
+                                            KR=1e-4,
+                                            MB=0.5,
+                                            NB=1,
+                                            BETA=1):
+        
+        self.parameter_values['OPTNOFLUVIAL'] = 0
+        self.parameter_values['DETACHMENT_LAW'] = 2
+        self.parameter_values['KB'] = KB
+        self.parameter_values['KR'] = KR
+        self.parameter_values['MB'] = MB
+        self.parameter_values['NB'] = NB
+        self.parameter_values['BETA'] = BETA
+
+    def set_detachment_generalized_fqs_law(self,
+                                           KB=1e-4,
+                                           KR=1e-4,
+                                           MB=0.5,
+                                           NB=1,
+                                           BETA=1):
+        
+        self.parameter_values['OPTNOFLUVIAL'] = 0
+        self.parameter_values['DETACHMENT_LAW'] = 3
+        self.parameter_values['KB'] = KB
+        self.parameter_values['KR'] = KR
+        self.parameter_values['MB'] = MB
+        self.parameter_values['NB'] = NB
+        self.parameter_values['BETA'] = BETA
+
+    def set_detachment_dummy_law(self):
+        
+        self.parameter_values['OPTNOFLUVIAL'] = 0
+        self.parameter_values['DETACHMENT_LAW'] = 4
+
+    def set_transport_law(self,
+                          OPTDETACHLIM=0,
+                          TRANSPORT_LAW=1,
+                          KF=617.,
+                          MF=0.66667,
+                          NF=0.66667,
+                          PF=1.5):
+        
+        self.parameter_values['OPTNOFLUVIAL'] = 0
+        self.parameter_values['OPTDETACHLIM'] = OPTDETACHLIM
+        self.parameter_values['TRANSPORT_LAW'] = TRANSPORT_LAW
+        self.parameter_values['KF'] = KF
+        self.parameter_values['MF'] = MF
+        self.parameter_values['NF'] = NF
+        self.parameter_values['PF'] = PF
         
     def set_overbank_deposition(self,
                                 OPTFLOODPLAIN=0,
@@ -860,8 +1041,8 @@ class ChildWriter(object):
                                 KD=0.01,
                                 OPTDIFFDEP=0,
                                 DIFFUSIONTHRESHOLD=0,
-                                OPT_NONLINEAR_DIFFUSION=1,
-                                OPT_DEPTH_DEPENDENT_DIFFUSION='false',
+                                OPT_NONLINEAR_DIFFUSION=0,
+                                OPT_DEPTH_DEPENDENT_DIFFUSION=0,
                                 DIFFDEPTHSCALE=1,
                                 CRITICAL_SLOPE=0.5774):
         
@@ -1001,7 +1182,6 @@ class ChildWriter(object):
         self.parameter_values['OPTRANDOMFIRES'] = OPTRANDOMFIRES
 
     def set_various(self,
-                    OPTDETACHLIM=0,
                     OPTTSOUTPUT=1,
                     TSOPINTRVL=100,
                     SURFER=0,
@@ -1011,7 +1191,6 @@ class ChildWriter(object):
                     OPT_FREEZE_ELEVATIONS=0,
                     OPTSTREAMLINEBNDY=0):
         
-        self.parameter_values['OPTDETACHLIM'] = OPTDETACHLIM
         self.parameter_values['OPTTSOUTPUT'] = OPTTSOUTPUT
         self.parameter_values['TSOPINTRVL'] = TSOPINTRVL
         self.parameter_values['SURFER'] = SURFER
@@ -1021,19 +1200,28 @@ class ChildWriter(object):
         self.parameter_values['OPT_FREEZE_ELEVATIONS'] = OPT_FREEZE_ELEVATIONS
         self.parameter_values['OPTSTREAMLINEBNDY'] = OPTSTREAMLINEBNDY
  
-    def write_parameter(self, parameter, value, parameter_name=None):
+    def write_parameter(self, input_file, parameter, value, parameter_name=None):
         
         if parameter_name is None:
             parameter_name = parameter
-        self.input_file.write(parameter_name + ': ' + self.parameter_descriptions[parameter] + '\n')
-        self.input_file.write(str(value) + '\n')
+        input_file.write(parameter_name + ': ' + self.parameter_descriptions[parameter] + '\n')
+        str_value = value
+        if isinstance(value, (int, float)) == True:
+            str_value = str(value)
+        elif isinstance(value, (stats._distn_infrastructure.rv_frozen, MixtureModel, MemoryModel)) == True:
+            str_value = str(value.rvs())
+        elif isinstance(value, LinearTimeSeries) == True:
+            str_value = value.write()
+        elif isinstance(value, FloodplainTimeSeries) == True:
+            str_value = value.write(parameter_name)
+        input_file.write(str_value + '\n')
         
-    def write_header(self, outfile_name, description, line_size):
+    def write_header(self, input_file, outfile_name, description, line_size):
         
-        self.input_file.write('#' + (line_size - 1)*'-' + '\n')
-        self.input_file.write('#\n')
-        self.input_file.write(divide_line(outfile_name + '.in: ' + description, line_size))
-        self.input_file.write('#' + (line_size - 1)*'-' + '\n')
+        input_file.write('#' + (line_size - 1)*'-' + '\n')
+        input_file.write('#\n')
+        input_file.write(divide_line(outfile_name + '.in: ' + description, line_size))
+        input_file.write('#' + (line_size - 1)*'-' + '\n')
         
     def write_run_header(self, line_size):
         
@@ -1212,18 +1400,23 @@ class ChildWriter(object):
 
         with open(os.path.join(self.base_directory,
                                self.parameter_values['OUTFILENAME'] + '.in'),
-                  'w') as self.input_file:
+                  'w') as input_file:
             
-            self.write_header(self.parameter_values['OUTFILENAME'],
+            self.write_header(input_file,self.parameter_values['OUTFILENAME'],
                               self.DESCRIPTION,
                               line_size)
             for parameter in self.parameter_values:
-                self.write_parameter(parameter, self.parameter_values[parameter])
-            self.input_file.write('\n')
-            self.input_file.write('Comments here:\n')
-            self.input_file.write('\n')
+                description_key = parameter
+                if description_key[-1].isdigit() == True and description_key[:-1] != 'TREEDIAM_B':
+                    description_key = description_key[:-1] + 'i'
+                self.write_parameter(input_file,description_key,
+                                     self.parameter_values[parameter],
+                                     parameter_name=parameter)
+            input_file.write('\n')
+            input_file.write('Comments here:\n')
+            input_file.write('\n')
             if COMMENTS is not None:
-                self.input_file.write(divide_line(COMMENTS, line_size))
+                input_file.write(divide_line(COMMENTS, line_size))
 
     def locate_input_file(self):
         
@@ -1240,21 +1433,34 @@ class ChildWriter(object):
         if os.path.isfile(self.locate_input_file()) == True:
             subprocess.call('rm ' + self.locate_input_file(), shell=True)
             
-    def write_file(self, array, filename, add_size=False):
+    def write_file(self, array, filename, add_size=False, time=None):
 
         with open(os.path.join(self.base_directory, filename), 'w') as file:
             
+            if time is not None:
+                file.write(' ' + str(time) + '\n')
             if add_size == True:
-                file.write(array.shape[0])
+                file.write(str(array.shape[0]) + '\n')
             if len(array.shape) == 1:
                 for i in range(array.shape[0]):
                     file.write(str(array[i]) + '\n')
             else:
                 for i in range(array.shape[0]):
                     file.write(str(array[i, 0]))
-                    for j in range(array.shape[1]):
+                    for j in range(1, array.shape[1]):
                         file.write(' ' + str(array[i, j]))
                     file.write('\n')
+
+    def write_points(self, array, filename, add_size=True):
+
+        with open(os.path.join(self.base_directory, filename + '.points'), 'w') as file:
+            
+            if add_size == True:
+                file.write(str(array.shape[0]) + '\n')
+            for i in range(array.shape[0]):
+                for j in range(array.shape[1] - 1):
+                    file.write(str(array[i, j]) + ' ')
+                file.write(str(int(array[i, -1])) + '\n')
                     
     def write_uplift_map(self, uplift_map, file_name='upliftmap', file_nb=1):
         
@@ -1280,3 +1486,51 @@ class ChildWriter(object):
             for time in uplift_times:
                 file.write(str(time) + '\n')
                 
+    def linear_time_series(self, nb_steps, rates, initial_value, seed=None):
+
+        run_time = self.parameter_values['RUNTIME']
+
+        if seed is not None:
+            np.random.seed(seed)
+
+        times = np.random.rand(nb_steps)
+        times /= np.sum(times)
+        times *= run_time
+        cum_times = np.cumsum(times)
+
+        new_value = initial_value
+        time_series = '@inline 0:' + str(new_value) + ' '
+        for time, cum_time, rate in zip(times, cum_times, rates):
+            new_value += rate*time
+            time_series += str(cum_time) + ':' + str(new_value) + ' '
+        time_series += 'interpolate'
+        
+        return time_series
+
+    def write_grid_to_gslib(self,
+                            grid,
+                            cell_size,
+                            file_name,
+                            variable_names):
+
+        with open(os.path.join(self.base_directory,
+                               file_name + '.dat'), 'w') as file:
+            
+            file.write(file_name + '\n')
+            file.write(str(grid.shape[0]))
+            for size in grid.shape[:0:-1]:
+                file.write(' ' + str(size))
+            for size in cell_size:
+                file.write(' ' + str(size/2))
+            for size in cell_size:
+                file.write(' ' + str(size))
+            file.write(' ' + str(1) + '\n')
+
+            grid = grid.reshape((grid.shape[0], -1)).T
+
+            for i in range(len(variable_names)):
+                file.write(variable_names[i] + '\n')
+            for i in range(grid.shape[0]):
+                for j in range(grid.shape[1] - 1):
+                    file.write(str(grid[i, j]) + ' ')
+                file.write(str(grid[i, -1]) + '\n')

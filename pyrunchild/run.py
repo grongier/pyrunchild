@@ -5,6 +5,9 @@
 import os
 import subprocess
 import sys
+from functools import partial
+from multiprocessing import Pool
+import numpy as np
 
 from pyrunchild.writer import ChildWriter
 from pyrunchild.reader import ChildReader
@@ -54,7 +57,15 @@ def query_yes_no(question, default = "yes"):
 
 class Child(object):
     
-    def __init__(self, base_directory, base_name, preset_parameters=True):
+    def __init__(self,
+                 base_directory,
+                 base_name,
+                 child_executable='child',
+                 preset_parameters=True,
+                 seed=100):
+
+        np.random.seed(seed)
+        self.seed = seed
 
         self.base_directory = os.path.abspath(base_directory)
         os.makedirs(self.base_directory, exist_ok=True)
@@ -64,28 +75,78 @@ class Child(object):
                                   preset_parameters=preset_parameters)
         self.writer.set_run_control(OUTFILENAME=base_name)
         self.reader = ChildReader(self.base_directory, base_name)
+
+        self.child_executable = child_executable
         
-    def run(self, input_file=None):
+    def run(self, input_name=None, silent_mode=False, total_silent_mode=False, write_log=False):
         
-        if input_file is None:
-            input_file = self.writer.locate_input_file()
+        if input_name is None:
+            input_name = self.base_name
         
-        if os.path.isfile(input_file) == False:
-            write_input = query_yes_no('No input file defined, do you want the writer to create one based on the parameters defined so far?')
-            if write_input == 'yes':
-                self.writer.write_input_parameters()
+        # if os.path.isfile(input_file) == False:
+        #     write_input = query_yes_no('No input file defined, do you want the writer to create one based on the parameters defined so far?')
+        #     if write_input == 'yes':
+        #         self.writer.write_input_parameters()
+        #     else:
+        #         return False
+
+        options = ''
+        if silent_mode == True:
+            options = '--silent-mode'
+
+        with subprocess.Popen(self.child_executable + ' ' + options + ' ' + input_name + '.in',
+                              cwd=self.base_directory,
+                              shell=True,
+                              stdout = subprocess.PIPE, 
+                              stderr = subprocess.STDOUT) as process:
+            if total_silent_mode == False or write_log == True:
+                log_file = None
+                if write_log == True:
+                    log_file = open(os.path.join(self.base_directory,
+                                                 input_name + '.log'),
+                                    'w')
+                for line in iter(process.stdout.readline, b""):
+                    if total_silent_mode == False:
+                        print(line.strip().decode('ascii'))
+                    if log_file is not None:
+                        log_file.write(line.strip().decode('ascii') + '\n')
+                if log_file is not None:
+                    log_file.close()
             else:
-                return False
+                process.communicate()
             
-        process = subprocess.Popen('child ' + input_file,
-                                   cwd=self.writer.base_directory,
-                                   shell=True,
-                                   stdout = subprocess.PIPE, 
-                                   stderr = subprocess.STDOUT)
-        for line in iter(process.stdout.readline, b""):
-            print(line.strip().decode('ascii'))
-            
-        return True
+        if process.returncode != 0:
+            raise subprocess.CalledProcessError(process.returncode,
+                                                process.args)
+
+    def multi_run(self,
+                  nb_realizations,
+                  n_jobs=-1,
+                  total_silent_mode=True,
+                  write_log=False):
+
+        if n_jobs == -1:
+            try:
+                n_jobs = int(os.environ["SLURM_JOB_CPUS_PER_NODE"])
+            except KeyError:
+                n_jobs = multiprocessing.cpu_count()
+
+        with Pool(processes=n_jobs) as pool:
+
+            base_name = self.writer.parameter_values['OUTFILENAME']
+            input_file_names = []
+            for i in range(nb_realizations):
+                if self.seed is not None:
+                    np.random.seed(self.seed + i)
+                    self.writer.parameter_values['SEED'] = self.seed + i
+                self.writer.parameter_values['OUTFILENAME'] = base_name + '_' + str(i + 1)
+                input_file_names.append(base_name + '_' + str(i + 1))
+                self.writer.write_input_parameters()
+
+            pool.map(partial(self.run,
+                             total_silent_mode=total_silent_mode,
+                             write_log=write_log),
+                     input_file_names)
     
     def generate_nodes(self,
                        OUTFILENAME='nodes',
@@ -101,10 +162,13 @@ class Child(object):
                        OUTLET_Y_COORD='n/a',
                        MEAN_ELEV=0,
                        RAND_ELEV=1,
+                       SLOPED_SURF=0,
+                       UPPER_BOUND_Z=0,
                        OPTINLET=0,
                        INLET_X='n/a',
                        INLET_Y='n/a',
-                       SEED=100):
+                       SEED=100,
+                       delete_files=True):
         
         node_writer = ChildWriter(self.base_directory)
         node_writer.set_run_control(OUTFILENAME=OUTFILENAME,
@@ -124,6 +188,8 @@ class Child(object):
                                    OUTLET_Y_COORD=OUTLET_Y_COORD,
                                    MEAN_ELEV=MEAN_ELEV,
                                    RAND_ELEV=RAND_ELEV,
+                                   SLOPED_SURF=SLOPED_SURF,
+                                   UPPER_BOUND_Z=UPPER_BOUND_Z,
                                    OPTINLET=OPTINLET,
                                    INLET_X=INLET_X,
                                    INLET_Y=INLET_Y)
@@ -133,13 +199,44 @@ class Child(object):
         node_writer.set_various(OPTTSOUTPUT=0)
         node_writer.write_input_parameters()
         
-        self.run(input_file=os.path.join(self.base_directory,
-                                         OUTFILENAME + '.in'))
+        input_name = os.path.join(self.base_directory, OUTFILENAME)
+        self.run(input_name=input_name)
         
         node_reader = ChildReader(self.base_directory, OUTFILENAME)
         nodes, _ = node_reader.read_nodes()
+
+        if delete_files == True:
+            subprocess.call('rm ' + self.base_directory + 'run.time', shell=True)
+            subprocess.call('rm ' + input_name + '*', shell=True)
         
         return nodes[0]
+
+    def curate_floodplain_log(self,
+                              input_name=None,
+                              delete_original_log=False,
+                              realization_nb=None):
+
+        if input_name is None:
+            input_name = self.base_name
+
+        file_suffix = ''
+        if realization_nb is not None:
+            file_suffix = '_' + str(realization_nb)
+        with open(input_name + file_suffix + '.log', 'r') as file,\
+             open(input_name + file_suffix + '_floodplain.log', 'w') as curated_file:
+            line = file.readline()
+            while line:
+                line = file.readline()
+                if 'Channel goes up' in line:
+                    curated_file.write(line)
+                if 'Channel Belt Geometry:' in line:
+                    curated_file.write(line)
+                    for i in range(5):
+                        line = file.readline()
+                        curated_file.write(line)
+                        
+        if delete_original_log == True:
+            subprocess.call('rm ' + input_name + file_suffix + '.log', shell=True)
     
     def clean_directory(self):
         
