@@ -76,7 +76,7 @@ class Child(object):
         self.writer.set_run_control(OUTFILENAME=base_name)
         self.reader = ChildReader(self.base_directory, base_name)
 
-        self.child_executable = child_executable
+        self.child_executable = os.path.expanduser(child_executable)
         
     def run(self, input_name=None, silent_mode=False, total_silent_mode=False, write_log=False):
         
@@ -94,9 +94,8 @@ class Child(object):
         if silent_mode == True:
             options = '--silent-mode'
 
-        with subprocess.Popen(self.child_executable + ' ' + options + ' ' + input_name + '.in',
+        with subprocess.Popen([self.child_executable, options, input_name + '.in'],
                               cwd=self.base_directory,
-                              shell=True,
                               stdout = subprocess.PIPE, 
                               stderr = subprocess.STDOUT) as process:
             if total_silent_mode == False or write_log == True:
@@ -147,6 +146,24 @@ class Child(object):
                              total_silent_mode=total_silent_mode,
                              write_log=write_log),
                      input_file_names)
+
+    def sub_run(self,
+                nb_realizations):
+
+        base_name = self.writer.parameter_values['OUTFILENAME']
+        processes = []
+        for i in range(nb_realizations):
+            if self.seed is not None:
+                np.random.seed(self.seed + i)
+                self.writer.parameter_values['SEED'] = self.seed + i
+            self.writer.parameter_values['OUTFILENAME'] = base_name + '_' + str(i + 1)
+            self.writer.write_input_parameters()
+
+            input_name = base_name + '_' + str(i + 1) + '.in'
+            processes.append(subprocess.Popen([self.child_executable, input_name],
+                                              cwd=self.base_directory))
+        for process in processes:
+            process.wait()
     
     def generate_nodes(self,
                        OUTFILENAME='nodes',

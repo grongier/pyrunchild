@@ -1213,7 +1213,8 @@ class ChildWriter(object):
         elif isinstance(value, LinearTimeSeries) == True:
             str_value = value.write()
         elif isinstance(value, FloodplainTimeSeries) == True:
-            str_value = value.write(parameter_name)
+            str_value = value.write(parameter_name,
+                                    base_name=self.parameter_values['OUTFILENAME'])
         input_file.write(str_value + '\n')
         
     def write_header(self, input_file, outfile_name, description, line_size):

@@ -2,6 +2,7 @@
 # Imports
 ################################################################################
 
+import os
 import numpy as np
 from scipy import stats
 
@@ -156,6 +157,9 @@ class FloodplainTimeSeries(object):
                  inlet_elevation_rate,
                  max_run_time=np.inf,
                  other_parameters=None,
+                 output_path='.',
+                 inline=False,
+                 set_out_intrvl=False,
                  seed=None):
 
         self.initial_time = initial_time
@@ -165,11 +169,15 @@ class FloodplainTimeSeries(object):
         self.inlet_elevation_rate = inlet_elevation_rate
         self.max_run_time = max_run_time
         self.other_parameters = other_parameters
+        self.output_path = os.path.abspath(output_path)
+        self.inline = inline
+        self.set_out_intrvl = set_out_intrvl
         if seed is not None:
             np.random.seed(seed)
 
         self.parameter_values = dict()
         self.parameter_values['RUNTIME'] = None
+        self.parameter_values['OPINTRVL'] = None
         self.parameter_values['ST_PMEAN'] = None
         self.parameter_values['ST_STDUR'] = None
         self.parameter_values['ST_ISTDUR'] = None
@@ -179,6 +187,7 @@ class FloodplainTimeSeries(object):
 
         self.is_called = dict()
         self.is_called['RUNTIME'] = None
+        self.is_called['OPINTRVL'] = None
         self.is_called['FP_INLET_ELEVATION'] = None
         if other_parameters is not None:
             for key in other_parameters:
@@ -216,15 +225,28 @@ class FloodplainTimeSeries(object):
                 
             iter_count += 1
 
-    def build_time_series(self):
+    def build_time_series(self, base_name=None):
 
-        time_series = '@inline '
-        for time, elevation in zip(self.times, self.inlet_elevations):
-            time_series += str(time) + ':' + str(elevation) + ' '
-        time_series += 'interpolate'
+        time_series = ''
+        if self.inline == True:
+            time_series = '@inline '
+            for time, elevation in zip(self.times, self.inlet_elevations):
+                time_series += str(time) + ':' + str(elevation) + ' '
+            time_series += 'interpolate'
+        else:
+            file_name = 'FP_INLET_ELEVATION.dat'
+            if base_name is not None:
+                file_name = base_name + '_' + file_name
+            with open(os.path.join(self.output_path, file_name), 'w') as file:
+                for time, elevation in zip(self.times, self.inlet_elevations):
+                    file.write(str(time) + ' ' + str(elevation) + '\n')
+            time_series = '@file ' + file_name + ' 1 2 interpolate'
 
         self.parameter_values['RUNTIME'] = str(self.times[-1])
         self.is_called['RUNTIME'] = False
+        if self.set_out_intrvl == True:
+            self.parameter_values['OPINTRVL'] = self.parameter_values['RUNTIME']
+            self.is_called['OPINTRVL'] = False
         self.parameter_values['FP_INLET_ELEVATION'] = time_series
         self.is_called['FP_INLET_ELEVATION'] = False
         
@@ -233,22 +255,33 @@ class FloodplainTimeSeries(object):
         if self.other_parameters is not None:
             for key in self.other_parameters:
                 if key in self.parameter_values:
-                    time_series = '@inline '
-                    for time in self.times:
-                        parameter_value = self.get_value(self.other_parameters[key][0])
-                        time_series += str(time) + ':' + str(parameter_value) + ' '
-                    time_series += self.other_parameters[key][1]
+                    time_series = ''
+                    if self.inline == True:
+                        time_series = '@inline '
+                        for time in self.times:
+                            parameter_value = self.get_value(self.other_parameters[key][0])
+                            time_series += str(time) + ':' + str(parameter_value) + ' '
+                        time_series += self.other_parameters[key][1]
+                    else:
+                        file_name = key + '.dat'
+                        if base_name is not None:
+                            file_name = base_name + '_' + file_name
+                        with open(os.path.join(self.output_path, file_name), 'w') as file:
+                            for time in self.times:
+                                parameter_value = self.get_value(self.other_parameters[key][0])
+                                file.write(str(time) + ' ' + str(parameter_value) + '\n')
+                        time_series = '@file ' + file_name + ' 1 2 interpolate'
 
                     self.parameter_values[key] = time_series
                     self.is_called[key] = False
                 else:
                     print(key, 'is not a time-varying parameter')
 
-    def write(self, parameter_name, max_iter=1e6):
+    def write(self, parameter_name, base_name=None, max_iter=1e6):
 
         if self.is_called['RUNTIME'] is None:
             self.build_varying_elevation(max_iter)
-            self.build_time_series()
+            self.build_time_series(base_name=base_name)
             self.build_other_time_series()
 
         self.is_called[parameter_name] = True

@@ -308,57 +308,43 @@ class ChildReader(object):
                 
         return lithology
 
-    @staticmethod
+    @staticmethod    
     # @jit(nopython=True)
-    def build_lithology_limits(channel_map, lithology, k_basement=-1, z_eps=1e-3):
+    def interpolate_lithology_grid(grid,
+                                   data,
+                                   channel_map,
+                                   lithology,
+                                   basement_layers):
 
-        nodes = []
+        for j in range(grid.shape[2]):
+            for i in range(grid.shape[3]):
 
-        for j in range(channel_map.shape[1]):
-            for i in range(channel_map.shape[2]):
                 n = j*channel_map.shape[2] + i
-
+                l = 0
+                layer_nb = len(lithology[n]) + basement_layers
                 z_interface = channel_map[2, j, i]
-                nodes.append((z_interface + z_eps,
-                              channel_map[1, j, i],
-                              channel_map[0, j, i],
-                              np.nan,
-                              np.nan,
-                              np.nan))
-                for k in range(0, lithology[n].shape[0] + k_basement):
-                    nodes.append((z_interface - z_eps,
-                                  channel_map[1, j, i],
-                                  channel_map[0, j, i],
-                                  lithology[n][k][1],
-                                  lithology[n][k][2],
-                                  lithology[n][k][3]))
 
-                    z_interface -= lithology[n][k][0]
-                    nodes.append((z_interface + z_eps,
-                                  channel_map[1, j, i],
-                                  channel_map[0, j, i],
-                                  lithology[n][k][1],
-                                  lithology[n][k][2],
-                                  lithology[n][k][3]))
+                for k in range(grid.shape[1] - 1, -1, -1):
 
-                nodes.append((z_interface - z_eps,
-                              channel_map[1, j, i],
-                              channel_map[0, j, i],
-                              0,
-                              lithology[n][k_basement][2],
-                              lithology[n][k_basement][3]))
+                    if grid[0, k, j, i] <= z_interface and l < layer_nb:
 
-        return np.array(nodes)
+                        while not (grid[0, k, j, i] <= z_interface
+                                   and grid[0, k, j, i] > z_interface - lithology[n][l][0]):
+                            z_interface -= lithology[n][l][0]
+                            l += 1
 
+                        if l < layer_nb:
+                            data[:, k, j, i] = lithology[n][l]
+
+        return np.concatenate((grid, data))
 
     def build_lithology_grid(self,
                              z_min,
                              z_max,
                              z_step,
+                             basement_layers=-1,
                              file_nb=None,
-                             realization_nb=None,
-                             k_basement=-1,
-                             z_eps=1e-3):
+                             realization_nb=None):
 
         if file_nb is None:
             lithology_files = glob(self.base_name + '*.litho*')
@@ -367,34 +353,19 @@ class ChildReader(object):
 
         channel_map = self.read_channel_map(file_nb,
                                             realization_nb=realization_nb)
-        lithology = self.read_lithology(file_nb, 
+        lithology = self.read_lithology(file_nb,
                                         realization_nb=realization_nb)
-
-        lithology = ChildReader.build_lithology_limits(channel_map,
-                                                       lithology,
-                                                       k_basement=k_basement,
-                                                       z_eps=z_eps)
 
         x = channel_map[0, 0]
         y = channel_map[1, :, 0]
         z = np.arange(z_min, z_max, z_step)
         grid = np.array(np.meshgrid(z, y, x, indexing='ij'))
+        data = np.full((4,) + grid.shape[1:], np.nan)
 
-        data = np.empty(grid.shape)
-        temp_data = griddata(lithology[:, :3],
-                             lithology[:, 3],
-                             grid.reshape(3, -1).T,
-                             method='nearest')
-        data[0] = temp_data.reshape(grid.shape[1:])
-        temp_data = griddata(lithology[:, :3],
-                             lithology[:, 4],
-                             grid.reshape(3, -1).T,
-                             method='nearest')
-        data[1] = temp_data.reshape(grid.shape[1:])
-        temp_data = griddata(lithology[:, :3],
-                             lithology[:, 5],
-                             grid.reshape(3, -1).T,
-                             method='nearest')
-        data[2] = temp_data.reshape(grid.shape[1:])
+        lithology = ChildReader.interpolate_lithology_grid(grid,
+                                                           data,
+                                                           channel_map,
+                                                           lithology,
+                                                           basement_layers)
 
-        return np.concatenate((grid, data))
+        return lithology
