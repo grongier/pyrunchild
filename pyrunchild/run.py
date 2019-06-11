@@ -162,6 +162,8 @@ class Child(object):
             input_name = base_name + '_' + str(i + 1) + '.in'
             processes.append(subprocess.Popen([self.child_executable, input_name],
                                               cwd=self.base_directory))
+                                              # stdout=subprocess.DEVNULL,
+                                              # stderr=subprocess.STDOUT)
         for process in processes:
             process.wait()
     

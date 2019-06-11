@@ -177,7 +177,8 @@ class FloodplainTimeSeries(object):
 
         self.parameter_values = dict()
         self.parameter_values['RUNTIME'] = None
-        self.parameter_values['OPINTRVL'] = None
+        if self.set_out_intrvl == True:
+            self.parameter_values['OPINTRVL'] = None
         self.parameter_values['ST_PMEAN'] = None
         self.parameter_values['ST_STDUR'] = None
         self.parameter_values['ST_ISTDUR'] = None
@@ -187,7 +188,8 @@ class FloodplainTimeSeries(object):
 
         self.is_called = dict()
         self.is_called['RUNTIME'] = None
-        self.is_called['OPINTRVL'] = None
+        if self.set_out_intrvl == True:
+            self.is_called['OPINTRVL'] = None
         self.is_called['FP_INLET_ELEVATION'] = None
         if other_parameters is not None:
             for key in other_parameters:
