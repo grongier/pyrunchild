@@ -6,7 +6,10 @@ import os
 import subprocess
 import sys
 from functools import partial
-from multiprocessing import Pool
+from contextlib import ExitStack
+import multiprocessing as mp
+# from multiprocessing import Pool
+from threading import Timer
 import numpy as np
 
 from pyrunchild.writer import ChildWriter
@@ -78,7 +81,10 @@ class Child(object):
 
         self.child_executable = os.path.expanduser(child_executable)
         
-    def run(self, input_name=None, silent_mode=False, total_silent_mode=False, write_log=False):
+    def talkative_run(self,
+                      input_name=None,
+                      silent_mode=False,
+                      write_log=False):
         
         if input_name is None:
             input_name = self.base_name
@@ -94,25 +100,76 @@ class Child(object):
         if silent_mode == True:
             options = '--silent-mode'
 
-        with subprocess.Popen([self.child_executable, options, input_name + '.in'],
-                              cwd=self.base_directory,
-                              stdout = subprocess.PIPE, 
-                              stderr = subprocess.STDOUT) as process:
-            if total_silent_mode == False or write_log == True:
-                log_file = None
-                if write_log == True:
-                    log_file = open(os.path.join(self.base_directory,
-                                                 input_name + '.log'),
-                                    'w')
-                for line in iter(process.stdout.readline, b""):
-                    if total_silent_mode == False:
-                        print(line.strip().decode('ascii'))
-                    if log_file is not None:
-                        log_file.write(line.strip().decode('ascii') + '\n')
+        with ExitStack() as stack:
+
+            log_file = None
+            if write_log == True:
+                log_file = stack.enter_context(open(os.path.join(self.base_directory,
+                                                                 input_name + '.log'),
+                                                    'w'))
+            process = stack.enter_context(subprocess.Popen([self.child_executable,
+                                                            options,
+                                                            input_name + '.in'],
+                                                           cwd=self.base_directory,
+                                                           stdout = subprocess.PIPE, 
+                                                           stderr = subprocess.DEVNULL))
+
+            for line in iter(process.stdout.readline, b""):
+                print(line.strip().decode('ascii'))
                 if log_file is not None:
-                    log_file.close()
-            else:
-                process.communicate()
+                    log_file.write(line.strip().decode('ascii') + '\n')
+
+        if process.returncode != 0:
+            raise subprocess.CalledProcessError(process.returncode,
+                                                process.args)
+
+    def run(self,
+            input_name=None,
+            silent_mode=False,
+            print_log=False,
+            write_log=False,
+            timeout=1e8):
+        
+        if input_name is None:
+            input_name = self.base_name
+        
+        # if os.path.isfile(input_file) == False:
+        #     write_input = query_yes_no('No input file defined, do you want the writer to create one based on the parameters defined so far?')
+        #     if write_input == 'yes':
+        #         self.writer.write_input_parameters()
+        #     else:
+        #         return False
+
+        options = ''
+        if silent_mode == True:
+            options = '--silent-mode'
+
+        with ExitStack() as stack:
+
+            stdout = subprocess.DEVNULL
+            if print_log == True:
+                stdout = subprocess.PIPE
+            elif write_log == True:
+                stdout = stack.enter_context(open(os.path.join(self.base_directory,
+                                                               input_name + '.log'),
+                                                  'w'))
+            process = stack.enter_context(subprocess.Popen([self.child_executable,
+                                                            options,
+                                                            input_name + '.in'],
+                                                           cwd=self.base_directory,
+                                                           stdout = stdout, 
+                                                           stderr = subprocess.DEVNULL,
+                                                           universal_newlines=True))
+            timer = Timer(timeout, process.terminate)
+            try:
+                timer.start()
+                stdout, _ = process.communicate()
+            finally:
+                timer.cancel()
+
+            if print_log == True:
+                for line in stdout.split('\n'):
+                    print(line)
             
         if process.returncode != 0:
             raise subprocess.CalledProcessError(process.returncode,
@@ -121,16 +178,17 @@ class Child(object):
     def multi_run(self,
                   nb_realizations,
                   n_jobs=-1,
-                  total_silent_mode=True,
-                  write_log=False):
+                  print_log=False,
+                  write_log=False,
+                  timeout=1e8):
 
         if n_jobs == -1:
             try:
-                n_jobs = int(os.environ["SLURM_JOB_CPUS_PER_NODE"])
+                n_jobs = int(os.environ["SLURM_NTASKS"])
             except KeyError:
-                n_jobs = multiprocessing.cpu_count()
+                n_jobs = mp.cpu_count()
 
-        with Pool(processes=n_jobs) as pool:
+        with mp.Pool(processes=n_jobs) as pool:
 
             base_name = self.writer.parameter_values['OUTFILENAME']
             input_file_names = []
@@ -143,12 +201,12 @@ class Child(object):
                 self.writer.write_input_parameters()
 
             pool.map(partial(self.run,
-                             total_silent_mode=total_silent_mode,
-                             write_log=write_log),
+                             print_log=print_log,
+                             write_log=write_log,
+                             timeout=timeout),
                      input_file_names)
 
-    def sub_run(self,
-                nb_realizations):
+    def sub_run(self, nb_realizations, timeout=1e8):
 
         base_name = self.writer.parameter_values['OUTFILENAME']
         processes = []
@@ -161,11 +219,16 @@ class Child(object):
 
             input_name = base_name + '_' + str(i + 1) + '.in'
             processes.append(subprocess.Popen([self.child_executable, input_name],
-                                              cwd=self.base_directory))
-                                              # stdout=subprocess.DEVNULL,
-                                              # stderr=subprocess.STDOUT)
+                                              cwd=self.base_directory,
+                                              stdout=subprocess.DEVNULL,
+                                              stderr=subprocess.DEVNULL))
         for process in processes:
-            process.wait()
+            timer = Timer(timeout, process.terminate)
+            try:
+                timer.start()
+                process.wait()
+            finally:
+                timer.cancel()
     
     def generate_nodes(self,
                        OUTFILENAME='nodes',

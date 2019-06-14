@@ -125,7 +125,7 @@ class ChildReader(object):
     def read_output_file(self,
                          file_type,
                          realization_nb=None,
-                         return_array=True):
+                         return_array=False):
         
         if file_type[0] != '.':
             file_type = '.' + file_type
@@ -152,7 +152,7 @@ class ChildReader(object):
                     temp_output.append(float(line))
 
                 time_slices.append(time_slice)
-                output.append(temp_output)
+                output.append(np.array(temp_output))
 
                 line = file.readline()
 
@@ -334,7 +334,15 @@ class ChildReader(object):
                             l += 1
 
                         if l < layer_nb:
-                            data[:, k, j, i] = lithology[n][l]
+                            data[1:, k, j, i] = lithology[n][l]
+                            data[0, k, j, i] = 1
+                        else:
+                            data[1:, k, j, i] = lithology[n][l]
+                            data[0, k, j, i] = 2
+
+                    elif l >= layer_nb:
+                        data[1:, k, j, i] = lithology[n][l]
+                        data[0, k, j, i] = 2
 
         return np.concatenate((grid, data))
 
@@ -349,7 +357,10 @@ class ChildReader(object):
         if file_nb is None:
             lithology_files = glob(self.base_name + '*.litho*')
             lithology_files = sorted_alphanumeric(lithology_files)
-            file_nb = lithology_files[-1].split('.')[-1][5:]
+            if len(lithology_files) > 0:
+                file_nb = lithology_files[-1].split('.')[-1][5:]
+            else:
+                return None
 
         channel_map = self.read_channel_map(file_nb,
                                             realization_nb=realization_nb)
@@ -360,7 +371,7 @@ class ChildReader(object):
         y = channel_map[1, :, 0]
         z = np.arange(z_min, z_max, z_step)
         grid = np.array(np.meshgrid(z, y, x, indexing='ij'))
-        data = np.full((4,) + grid.shape[1:], np.nan)
+        data = np.zeros((5,) + grid.shape[1:])
 
         lithology = ChildReader.interpolate_lithology_grid(grid,
                                                            data,
