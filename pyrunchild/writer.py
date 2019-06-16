@@ -1395,7 +1395,7 @@ class ChildWriter(object):
         self.input_file.write('#   Other options\n')
         self.input_file.write('#\n')
 
-    def write_input_parameters(self, COMMENTS=None):
+    def write_input_file(self, COMMENTS=None):
 
         line_size = 68
 

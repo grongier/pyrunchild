@@ -10,11 +10,29 @@ from scipy import stats
 # MixtureModel
 ################################################################################
 
+class RangeModel(object):
+    
+    def __init__(self, start=0, step=1):
+
+        self.start = start
+        self.step = step
+
+    def rvs(self, size=1):
+        
+        samples = np.arange(self.start, self.start + size, self.step)
+
+        if samples.shape[0] == 1:
+            return samples[0]
+        return samples
+
+################################################################################
+# MixtureModel
+################################################################################
+
 class MixtureModel(object):
     
-    def __init__(self, submodels, weights=None, *args, **kwargs):
+    def __init__(self, submodels, weights=None):
         
-        super().__init__(*args, **kwargs)
         self.submodels = submodels
         self.weights = weights
 
@@ -39,9 +57,8 @@ class MixtureModel(object):
 
 class MemoryModel(object):
     
-    def __init__(self, model, call_memory=1, *args, **kwargs):
+    def __init__(self, model, call_memory=1):
         
-        super().__init__(*args, **kwargs)
         self.model = model
         self.call_memory = call_memory
         self.call_count = 0

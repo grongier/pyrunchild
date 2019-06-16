@@ -198,7 +198,7 @@ class Child(object):
                     self.writer.parameter_values['SEED'] = self.seed + i
                 self.writer.parameter_values['OUTFILENAME'] = base_name + '_' + str(i + 1)
                 input_file_names.append(base_name + '_' + str(i + 1))
-                self.writer.write_input_parameters()
+                self.writer.write_input_file()
 
             pool.map(partial(self.run,
                              print_log=print_log,
@@ -215,7 +215,7 @@ class Child(object):
                 np.random.seed(self.seed + i)
                 self.writer.parameter_values['SEED'] = self.seed + i
             self.writer.parameter_values['OUTFILENAME'] = base_name + '_' + str(i + 1)
-            self.writer.write_input_parameters()
+            self.writer.write_input_file()
 
             input_name = base_name + '_' + str(i + 1) + '.in'
             processes.append(subprocess.Popen([self.child_executable, input_name],
