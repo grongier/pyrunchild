@@ -12,89 +12,41 @@ import multiprocessing as mp
 from threading import Timer
 import numpy as np
 
-from pyrunchild.writer import ChildWriter
-from pyrunchild.reader import ChildReader
-
-################################################################################
-# Miscellaneous
-################################################################################
-
-def query_yes_no(question, default = "yes"):
-    '''
-    Ask a yes/no question via raw_input() and return the answer
-    Written by Trent Mick under the MIT license, see:
-    https://code.activestate.com/recipes/577058-query-yesno/
-    
-    @param question: A string that is presented to the user
-    @param default: The presumed answer if the user just hits <Enter>.
-                    It must be "yes" (the default), "no" or None (meaning
-                    an answer is required of the user)
-    @return The "answer", i.e., either "yes" or "no"
-    '''
-    
-    valid = {"yes":"yes",   "y":"yes",  "ye":"yes",
-             "no":"no",     "n":"no"}
-    if default == None:
-        prompt = " [y/n] "
-    elif default == "yes":
-        prompt = " [Y/n] "
-    elif default == "no":
-        prompt = " [y/N] "
-    else:
-        raise ValueError("invalid default answer: '%s'" % default)
-
-    while 1:
-        sys.stdout.write(question + prompt)
-        choice = input().lower()
-        if default is not None and choice == '':
-            return default
-        elif choice in valid.keys():
-            return valid[choice]
-        else:
-            sys.stdout.write("Please respond with 'yes' or 'no' "\
-                             "(or 'y' or 'n').\n")
+from pyrunchild.writer import InputWriter
 
 ################################################################################
 # Child
 ################################################################################
 
-class Child(object):
+class Child(InputWriter):
     
     def __init__(self,
                  base_directory,
                  base_name,
                  child_executable='child',
+                 nb_realizations=1,
                  preset_parameters=True,
                  seed=100):
 
-        np.random.seed(seed)
-        self.seed = seed
-
-        self.base_directory = os.path.abspath(base_directory)
-        os.makedirs(self.base_directory, exist_ok=True)
-        self.base_name = os.path.join(self.base_directory, base_name)
-        
-        self.writer = ChildWriter(self.base_directory,
-                                  preset_parameters=preset_parameters)
-        self.writer.set_run_control(OUTFILENAME=base_name)
-        self.reader = ChildReader(self.base_directory, base_name)
+        InputWriter.__init__(self,
+                             base_directory,
+                             base_name,
+                             nb_realizations=nb_realizations,
+                             preset_parameters=preset_parameters,
+                             seed=seed)
 
         self.child_executable = os.path.expanduser(child_executable)
         
     def talkative_run(self,
+                      realization=1,
                       input_name=None,
                       silent_mode=False,
                       write_log=False):
         
         if input_name is None:
-            input_name = self.base_name
-        
-        # if os.path.isfile(input_file) == False:
-        #     write_input = query_yes_no('No input file defined, do you want the writer to create one based on the parameters defined so far?')
-        #     if write_input == 'yes':
-        #         self.writer.write_input_parameters()
-        #     else:
-        #         return False
+            if self.base_names is None:
+                self.write_input_file()
+            input_name = self.base_names[realization - 1]
 
         options = ''
         if silent_mode == True:
@@ -124,63 +76,71 @@ class Child(object):
                                                 process.args)
 
     def run(self,
+            realization=1,
             input_name=None,
             silent_mode=False,
             print_log=False,
             write_log=False,
-            timeout=1e8):
+            timeout=1e8,
+            nb_attempts=1):
         
         if input_name is None:
-            input_name = self.base_name
-        
-        # if os.path.isfile(input_file) == False:
-        #     write_input = query_yes_no('No input file defined, do you want the writer to create one based on the parameters defined so far?')
-        #     if write_input == 'yes':
-        #         self.writer.write_input_parameters()
-        #     else:
-        #         return False
+            if self.base_names is None:
+                self.write_input_file()
+            input_name = self.base_names[realization - 1]
 
         options = ''
         if silent_mode == True:
             options = '--silent-mode'
 
-        with ExitStack() as stack:
+        return_code = None
+        attempt = 0
+        while return_code != 0 and attempt < nb_attempts:
 
-            stdout = subprocess.DEVNULL
-            if print_log == True:
-                stdout = subprocess.PIPE
-            elif write_log == True:
-                stdout = stack.enter_context(open(os.path.join(self.base_directory,
-                                                               input_name + '.log'),
-                                                  'w'))
-            process = stack.enter_context(subprocess.Popen([self.child_executable,
-                                                            options,
-                                                            input_name + '.in'],
-                                                           cwd=self.base_directory,
-                                                           stdout = stdout, 
-                                                           stderr = subprocess.DEVNULL,
-                                                           universal_newlines=True))
-            timer = Timer(timeout, process.terminate)
-            try:
-                timer.start()
-                stdout, _ = process.communicate()
-            finally:
-                timer.cancel()
+            with ExitStack() as stack:
 
-            if print_log == True:
-                for line in stdout.split('\n'):
-                    print(line)
+                if attempt > 0:
+                    self.parameter_values[realization - 1]['SEED'] += self.nb_realizations
+                    self.write_input_file()
+
+                stdout = subprocess.DEVNULL
+                if print_log == True:
+                    stdout = subprocess.PIPE
+                elif write_log == True:
+                    stdout = stack.enter_context(open(os.path.join(self.base_directory,
+                                                                   input_name + '.log'),
+                                                      'w'))
+                process = stack.enter_context(subprocess.Popen([self.child_executable,
+                                                                options,
+                                                                input_name + '.in'],
+                                                               cwd=self.base_directory,
+                                                               stdout = stdout, 
+                                                               stderr = subprocess.DEVNULL,
+                                                               universal_newlines=True))
+                timer = Timer(timeout, process.terminate)
+                try:
+                    timer.start()
+                    stdout, _ = process.communicate()
+                finally:
+                    timer.cancel()
+
+                return_code = process.returncode
+                attempt += 1
+
+                if print_log == True:
+                    for line in stdout.split('\n'):
+                        print(line)
             
         if process.returncode != 0:
             raise subprocess.CalledProcessError(process.returncode,
                                                 process.args)
 
     def multi_run(self,
-                  nb_realizations,
                   n_jobs=-1,
                   print_log=False,
                   write_log=False,
-                  timeout=1e8):
+                  timeout=1e8,
+                  nb_attempts=1):
 
         if n_jobs == -1:
             try:
@@ -190,21 +150,15 @@ class Child(object):
 
         with mp.Pool(processes=n_jobs) as pool:
 
-            base_name = self.writer.parameter_values['OUTFILENAME']
-            input_file_names = []
-            for i in range(nb_realizations):
-                if self.seed is not None:
-                    np.random.seed(self.seed + i)
-                    self.writer.parameter_values['SEED'] = self.seed + i
-                self.writer.parameter_values['OUTFILENAME'] = base_name + '_' + str(i + 1)
-                input_file_names.append(base_name + '_' + str(i + 1))
-                self.writer.write_input_file()
+            if self.base_names is None:
+                self.write_input_file()
 
             pool.map(partial(self.run,
                              print_log=print_log,
                              write_log=write_log,
-                             timeout=timeout),
-                     input_file_names)
+                             timeout=timeout,
+                             nb_attempts=nb_attempts),
+                     range(self.nb_realizations))
 
     def sub_run(self, nb_realizations, timeout=1e8):
 
@@ -252,9 +206,8 @@ class Child(object):
                        SEED=100,
                        delete_files=True):
         
-        node_writer = ChildWriter(self.base_directory)
-        node_writer.set_run_control(OUTFILENAME=OUTFILENAME,
-                                    RUNTIME=0,
+        node_writer = InputWriter(self.base_directory, OUTFILENAME)
+        node_writer.set_run_control(RUNTIME=0,
                                     OPINTRVL=1,
                                     SEED=SEED)
         node_writer.set_mesh(OPTREADINPUT=10,
@@ -279,13 +232,12 @@ class Child(object):
         node_writer.set_fluvial_transport(OPTNOFLUVIAL=1)
         node_writer.set_hillslope_transport(OPTNODIFFUSION=1)
         node_writer.set_various(OPTTSOUTPUT=0)
-        node_writer.write_input_parameters()
+        node_writer.write_input_file()
         
         input_name = os.path.join(self.base_directory, OUTFILENAME)
         self.run(input_name=input_name)
         
-        node_reader = ChildReader(self.base_directory, OUTFILENAME)
-        nodes, _ = node_reader.read_nodes()
+        nodes, _ = node_writer.read_nodes()
 
         if delete_files == True:
             subprocess.call('rm ' + self.base_directory + 'run.time', shell=True)

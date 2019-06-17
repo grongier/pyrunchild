@@ -20,6 +20,7 @@ class RangeModel(object):
     def rvs(self, size=1):
         
         samples = np.arange(self.start, self.start + size, self.step)
+        self.start += size
 
         if samples.shape[0] == 1:
             return samples[0]

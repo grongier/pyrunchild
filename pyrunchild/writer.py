@@ -8,7 +8,8 @@ from collections import OrderedDict
 import numpy as np
 from scipy import stats
 
-from pyrunchild.time_series import MixtureModel, MemoryModel, LinearTimeSeries, FloodplainTimeSeries
+from pyrunchild.manager import DataManager
+from pyrunchild.time_series import RangeModel, MixtureModel, MemoryModel, LinearTimeSeries, FloodplainTimeSeries
 
 ################################################################################
 # Miscellaneous
@@ -23,22 +24,23 @@ def divide_line(string,
     return start_str + join_str.join(textwrap.wrap(string, line_size)) + end_str
 
 ################################################################################
-# ChildWriter
+# InputWriter
 ################################################################################
 
-class ChildWriter(object):
+class InputWriter(DataManager):
     
-    def __init__(self, base_directory, preset_parameters=True, seed=None):
+    def __init__(self,
+                 base_directory,
+                 base_name,
+                 nb_realizations=1,
+                 preset_parameters=True,
+                 seed=100):
 
-        if seed is not None:
-            np.random.seed(seed)
-
-        self.base_directory = base_directory
-        os.makedirs(self.base_directory, exist_ok=True)
+        DataManager.__init__(self, base_directory, base_name)
+        self.out_file_name = base_name
         
-        self.parameter_descriptions = self.build_parameter_descriptions()
-        
-        self.parameter_values = OrderedDict()
+        self.nb_realizations = nb_realizations
+        self.parameters = OrderedDict()
         if preset_parameters == True:
             self.set_run_control()
             self.set_mesh()
@@ -64,6 +66,12 @@ class ChildWriter(object):
             self.set_forest()
             self.set_fire()
             self.set_various()
+        self.parameter_values = None
+        self.parameter_descriptions = self.build_parameter_descriptions()
+
+        self.seed = seed
+
+        self.base_names = None
         
     def build_parameter_descriptions(self):
         
@@ -365,22 +373,21 @@ class ChildWriter(object):
                   sep='')
             
     def set_run_control(self,
-                        OUTFILENAME='outfilename',
+                        OUTFILENAME=None,
                         DESCRIPTION='',
                         RUNTIME=100000,
                         OPINTRVL=1000,
                         SEED=100,
                         FSEED=100):
         
-        if OUTFILENAME[-3:] == '.in':
-            self.parameter_values['OUTFILENAME'] = OUTFILENAME[:-3]
-        else:
-            self.parameter_values['OUTFILENAME'] = OUTFILENAME
+        if OUTFILENAME is None:
+            OUTFILENAME = self.out_file_name
+        self.parameters['OUTFILENAME'] = OUTFILENAME
         self.DESCRIPTION = DESCRIPTION
-        self.parameter_values['RUNTIME'] = RUNTIME
-        self.parameter_values['OPINTRVL'] = OPINTRVL
-        self.parameter_values['SEED'] = SEED
-        self.parameter_values['FSEED'] = FSEED
+        self.parameters['RUNTIME'] = RUNTIME
+        self.parameters['OPINTRVL'] = OPINTRVL
+        self.parameters['SEED'] = SEED
+        self.parameters['FSEED'] = FSEED
         
     def set_mesh(self,
                  OPTREADINPUT=10,
@@ -407,29 +414,29 @@ class ChildWriter(object):
                  MESHADAPTAREA_MINAREA='n/a',
                  MESHADAPTAREA_MAXVAREA='n/a'):
         
-        self.parameter_values['OPTREADINPUT'] = OPTREADINPUT
-        self.parameter_values['OPTINITMESHDENS'] = OPTINITMESHDENS
-        self.parameter_values['X_GRID_SIZE'] = X_GRID_SIZE
-        self.parameter_values['Y_GRID_SIZE'] = Y_GRID_SIZE
-        self.parameter_values['OPT_PT_PLACE'] = OPT_PT_PLACE
-        self.parameter_values['GRID_SPACING'] = GRID_SPACING
-        self.parameter_values['NUM_PTS'] = NUM_PTS
-        self.parameter_values['INPUTDATAFILE'] = INPUTDATAFILE
-        self.parameter_values['INPUTTIME'] = INPUTTIME
-        self.parameter_values['OPTREADLAYER'] = OPTREADLAYER
-        self.parameter_values['POINTFILENAME'] = POINTFILENAME
-        self.parameter_values['ARCGRIDFILENAME'] = ARCGRIDFILENAME
-        self.parameter_values['TILE_INPUT_PATH'] = TILE_INPUT_PATH
-        self.parameter_values['OPT_TILES_OR_SINGLE_FILE'] = OPT_TILES_OR_SINGLE_FILE
-        self.parameter_values['LOWER_LEFT_EASTING'] = LOWER_LEFT_EASTING
-        self.parameter_values['LOWER_LEFT_NORTHING'] = LOWER_LEFT_NORTHING
-        self.parameter_values['NUM_TILES_EAST'] = NUM_TILES_EAST
-        self.parameter_values['NUM_TILES_NORTH'] = NUM_TILES_NORTH
-        self.parameter_values['OPTMESHADAPTDZ'] = OPTMESHADAPTDZ
-        self.parameter_values['MESHADAPT_MAXNODEFLUX'] = MESHADAPT_MAXNODEFLUX
-        self.parameter_values['OPTMESHADAPTAREA'] = OPTMESHADAPTAREA
-        self.parameter_values['MESHADAPTAREA_MINAREA'] = MESHADAPTAREA_MINAREA
-        self.parameter_values['MESHADAPTAREA_MAXVAREA'] = MESHADAPTAREA_MAXVAREA
+        self.parameters['OPTREADINPUT'] = OPTREADINPUT
+        self.parameters['OPTINITMESHDENS'] = OPTINITMESHDENS
+        self.parameters['X_GRID_SIZE'] = X_GRID_SIZE
+        self.parameters['Y_GRID_SIZE'] = Y_GRID_SIZE
+        self.parameters['OPT_PT_PLACE'] = OPT_PT_PLACE
+        self.parameters['GRID_SPACING'] = GRID_SPACING
+        self.parameters['NUM_PTS'] = NUM_PTS
+        self.parameters['INPUTDATAFILE'] = INPUTDATAFILE
+        self.parameters['INPUTTIME'] = INPUTTIME
+        self.parameters['OPTREADLAYER'] = OPTREADLAYER
+        self.parameters['POINTFILENAME'] = POINTFILENAME
+        self.parameters['ARCGRIDFILENAME'] = ARCGRIDFILENAME
+        self.parameters['TILE_INPUT_PATH'] = TILE_INPUT_PATH
+        self.parameters['OPT_TILES_OR_SINGLE_FILE'] = OPT_TILES_OR_SINGLE_FILE
+        self.parameters['LOWER_LEFT_EASTING'] = LOWER_LEFT_EASTING
+        self.parameters['LOWER_LEFT_NORTHING'] = LOWER_LEFT_NORTHING
+        self.parameters['NUM_TILES_EAST'] = NUM_TILES_EAST
+        self.parameters['NUM_TILES_NORTH'] = NUM_TILES_NORTH
+        self.parameters['OPTMESHADAPTDZ'] = OPTMESHADAPTDZ
+        self.parameters['MESHADAPT_MAXNODEFLUX'] = MESHADAPT_MAXNODEFLUX
+        self.parameters['OPTMESHADAPTAREA'] = OPTMESHADAPTAREA
+        self.parameters['MESHADAPTAREA_MINAREA'] = MESHADAPTAREA_MINAREA
+        self.parameters['MESHADAPTAREA_MAXVAREA'] = MESHADAPTAREA_MAXVAREA
         
     def set_boundaries(self,
                        TYP_BOUND=1,
@@ -448,31 +455,31 @@ class ChildWriter(object):
                        INLET_OPTCALCSEDFEED='n/a',
                        INLET_SLOPE='n/a'):
         
-        self.parameter_values['TYP_BOUND'] = TYP_BOUND
-        self.parameter_values['NUMBER_OUTLETS'] = NUMBER_OUTLETS
-        self.parameter_values['OUTLET_X_COORD'] = OUTLET_X_COORD
-        self.parameter_values['OUTLET_Y_COORD'] = OUTLET_Y_COORD
-        self.parameter_values['MEAN_ELEV'] = MEAN_ELEV
-        self.parameter_values['RAND_ELEV'] = RAND_ELEV
-        self.parameter_values['SLOPED_SURF'] = SLOPED_SURF
-        self.parameter_values['UPPER_BOUND_Z'] = UPPER_BOUND_Z
-        self.parameter_values['OPTINLET'] = OPTINLET
-        self.parameter_values['INDRAREA'] = INDRAREA
+        self.parameters['TYP_BOUND'] = TYP_BOUND
+        self.parameters['NUMBER_OUTLETS'] = NUMBER_OUTLETS
+        self.parameters['OUTLET_X_COORD'] = OUTLET_X_COORD
+        self.parameters['OUTLET_Y_COORD'] = OUTLET_Y_COORD
+        self.parameters['MEAN_ELEV'] = MEAN_ELEV
+        self.parameters['RAND_ELEV'] = RAND_ELEV
+        self.parameters['SLOPED_SURF'] = SLOPED_SURF
+        self.parameters['UPPER_BOUND_Z'] = UPPER_BOUND_Z
+        self.parameters['OPTINLET'] = OPTINLET
+        self.parameters['INDRAREA'] = INDRAREA
         for i, in_sed_load in enumerate(INSEDLOADi):
-            self.parameter_values['INSEDLOAD' + str(i + 1)] = in_sed_load
-        self.parameter_values['INLET_X'] = INLET_X
-        self.parameter_values['INLET_Y'] = INLET_Y
-        self.parameter_values['INLET_OPTCALCSEDFEED'] = INLET_OPTCALCSEDFEED
-        self.parameter_values['INLET_SLOPE'] = INLET_SLOPE
+            self.parameters['INSEDLOAD' + str(i + 1)] = in_sed_load
+        self.parameters['INLET_X'] = INLET_X
+        self.parameters['INLET_Y'] = INLET_Y
+        self.parameters['INLET_OPTCALCSEDFEED'] = INLET_OPTCALCSEDFEED
+        self.parameters['INLET_SLOPE'] = INLET_SLOPE
         
     def set_bedrock(self,
                     BEDROCKDEPTH=1e10,
                     REGINIT=0,
                     MAXREGDEPTH=100):
         
-        self.parameter_values['BEDROCKDEPTH'] = BEDROCKDEPTH
-        self.parameter_values['REGINIT'] = REGINIT
-        self.parameter_values['MAXREGDEPTH'] = MAXREGDEPTH
+        self.parameters['BEDROCKDEPTH'] = BEDROCKDEPTH
+        self.parameters['REGINIT'] = REGINIT
+        self.parameters['MAXREGDEPTH'] = MAXREGDEPTH
         
     def set_lithology(self,
                       OPT_READ_LAYFILE=0,
@@ -485,22 +492,22 @@ class ChildWriter(object):
         
 #         print('Lithology also requires ROCKDENSITYINIT and SOILBULKDENSITY (see material_parameters)')
         
-        self.parameter_values['OPT_READ_LAYFILE'] = OPT_READ_LAYFILE
-        self.parameter_values['INPUT_LAY_FILE'] = INPUT_LAY_FILE
-        self.parameter_values['OPT_READ_ETCHFILE'] = OPT_READ_ETCHFILE
-        self.parameter_values['ETCHFILE_NAME'] = ETCHFILE_NAME
-        self.parameter_values['OPT_SET_ERODY_FROM_FILE'] = OPT_SET_ERODY_FROM_FILE
-        self.parameter_values['ERODYFILE_NAME'] = ERODYFILE_NAME
-        self.parameter_values['OPT_NEW_LAYERSINPUT'] = OPT_NEW_LAYERSINPUT
+        self.parameters['OPT_READ_LAYFILE'] = OPT_READ_LAYFILE
+        self.parameters['INPUT_LAY_FILE'] = INPUT_LAY_FILE
+        self.parameters['OPT_READ_ETCHFILE'] = OPT_READ_ETCHFILE
+        self.parameters['ETCHFILE_NAME'] = ETCHFILE_NAME
+        self.parameters['OPT_SET_ERODY_FROM_FILE'] = OPT_SET_ERODY_FROM_FILE
+        self.parameters['ERODYFILE_NAME'] = ERODYFILE_NAME
+        self.parameters['OPT_NEW_LAYERSINPUT'] = OPT_NEW_LAYERSINPUT
         
     def set_layers(self,
                    OPTLAYEROUTPUT=0,
                    OPT_NEW_LAYERSOUTPUT=0,
                    OPTINTERPLAYER=0):
         
-        self.parameter_values['OPTLAYEROUTPUT'] = OPTLAYEROUTPUT
-        self.parameter_values['OPT_NEW_LAYERSOUTPUT'] = OPT_NEW_LAYERSOUTPUT
-        self.parameter_values['OPTINTERPLAYER'] = OPTINTERPLAYER
+        self.parameters['OPTLAYEROUTPUT'] = OPTLAYEROUTPUT
+        self.parameters['OPT_NEW_LAYERSOUTPUT'] = OPT_NEW_LAYERSOUTPUT
+        self.parameters['OPTINTERPLAYER'] = OPTINTERPLAYER
         
     def set_stratigraphic_grid(self,
                                OPTSTRATGRID=0,
@@ -511,13 +518,13 @@ class ChildWriter(object):
                                GR_LENGTH=10000,
                                SG_MAXREGDEPTH=100):
         
-        self.parameter_values['OPTSTRATGRID'] = OPTSTRATGRID
-        self.parameter_values['XCORNER'] = XCORNER
-        self.parameter_values['YCORNER'] = YCORNER
-        self.parameter_values['GRIDDX'] = GRIDDX
-        self.parameter_values['GR_WIDTH'] = GR_WIDTH
-        self.parameter_values['GR_LENGTH'] = GR_LENGTH
-        self.parameter_values['SG_MAXREGDEPTH'] = SG_MAXREGDEPTH
+        self.parameters['OPTSTRATGRID'] = OPTSTRATGRID
+        self.parameters['XCORNER'] = XCORNER
+        self.parameters['YCORNER'] = YCORNER
+        self.parameters['GRIDDX'] = GRIDDX
+        self.parameters['GR_WIDTH'] = GR_WIDTH
+        self.parameters['GR_LENGTH'] = GR_LENGTH
+        self.parameters['SG_MAXREGDEPTH'] = SG_MAXREGDEPTH
         
     def set_tectonics(self,
                       OPTNOUPLIFT=0,
@@ -594,64 +601,64 @@ class ChildWriter(object):
                        18. Uplift and whole-landscape tilting
                        19. Migrating Gaussian bump
         '''
-        self.parameter_values['OPTNOUPLIFT'] = OPTNOUPLIFT
-        self.parameter_values['UPTYPE'] = UPTYPE
-        self.parameter_values['UPDUR'] = UPDUR
-        self.parameter_values['UPRATE'] = UPRATE
-        self.parameter_values['FAULTPOS'] = FAULTPOS
-        self.parameter_values['SUBSRATE'] = SUBSRATE
-        self.parameter_values['SLIPRATE'] = SLIPRATE
-        self.parameter_values['SS_OPT_WRAP_BOUNDARIES'] = SS_OPT_WRAP_BOUNDARIES
-        self.parameter_values['SS_BUFFER_WIDTH'] = SS_BUFFER_WIDTH
-        self.parameter_values['FOLDPROPRATE'] = FOLDPROPRATE
-        self.parameter_values['FOLDWAVELEN'] = FOLDWAVELEN
-        self.parameter_values['TIGHTENINGRATE'] = TIGHTENINGRATE
-        self.parameter_values['ANTICLINEXCOORD'] = ANTICLINEXCOORD
-        self.parameter_values['ANTICLINEYCOORD'] = ANTICLINEYCOORD
-        self.parameter_values['YFOLDINGSTART'] = YFOLDINGSTART
-        self.parameter_values['UPSUBRATIO'] = UPSUBRATIO
-        self.parameter_values['FOLDLATRATE'] = FOLDLATRATE
-        self.parameter_values['FOLDUPRATE'] = FOLDUPRATE
-        self.parameter_values['FOLDPOSITION'] = FOLDPOSITION
-        self.parameter_values['BLFALL_UPPER'] = BLFALL_UPPER
-        self.parameter_values['BLDIVIDINGLINE'] = BLDIVIDINGLINE
-        self.parameter_values['FLATDEPTH'] = FLATDEPTH
-        self.parameter_values['RAMPDIP'] = RAMPDIP
-        self.parameter_values['KINKDIP'] = KINKDIP
-        self.parameter_values['UPPERKINKDIP'] = UPPERKINKDIP
-        self.parameter_values['ACCEL_REL_UPTIME'] = ACCEL_REL_UPTIME
-        self.parameter_values['VERTICAL_THROW'] = VERTICAL_THROW
-        self.parameter_values['FAULT_PIVOT_DISTANCE'] = FAULT_PIVOT_DISTANCE
-        self.parameter_values['MINIMUM_UPRATE'] = MINIMUM_UPRATE
-        self.parameter_values['OPT_INCREASE_TO_FRONT'] = OPT_INCREASE_TO_FRONT
-        self.parameter_values['DECAY_PARAM_UPLIFT'] = DECAY_PARAM_UPLIFT
-        self.parameter_values['NUMUPLIFTMAPS'] = NUMUPLIFTMAPS
-        self.parameter_values['UPMAPFILENAME'] = UPMAPFILENAME
-        self.parameter_values['UPTIMEFILENAME'] = UPTIMEFILENAME
-        self.parameter_values['FRONT_PROP_RATE'] = FRONT_PROP_RATE
-        self.parameter_values['UPLIFT_FRONT_GRADIENT'] = UPLIFT_FRONT_GRADIENT
-        self.parameter_values['STARTING_YCOORD'] = STARTING_YCOORD
-        self.parameter_values['BLOCKEDGEPOSX'] = BLOCKEDGEPOSX
-        self.parameter_values['BLOCKWIDTHX'] = BLOCKWIDTHX
-        self.parameter_values['BLOCKEDGEPOSY'] = BLOCKEDGEPOSY
-        self.parameter_values['BLOCKWIDTHY'] = BLOCKWIDTHY
-        self.parameter_values['BLOCKMOVERATE'] = BLOCKMOVERATE
-        self.parameter_values['TILT_RATE'] = TILT_RATE
-        self.parameter_values['TILT_ORIENTATION'] = TILT_ORIENTATION
-        self.parameter_values['BUMP_MIGRATION_RATE'] = BUMP_MIGRATION_RATE
-        self.parameter_values['BUMP_INITIAL_POSITION'] = BUMP_INITIAL_POSITION
-        self.parameter_values['BUMP_AMPLITUDE'] = BUMP_AMPLITUDE
-        self.parameter_values['BUMP_WAVELENGTH'] = BUMP_WAVELENGTH
-        self.parameter_values['OPT_INITIAL_BUMP'] = OPT_INITIAL_BUMP
+        self.parameters['OPTNOUPLIFT'] = OPTNOUPLIFT
+        self.parameters['UPTYPE'] = UPTYPE
+        self.parameters['UPDUR'] = UPDUR
+        self.parameters['UPRATE'] = UPRATE
+        self.parameters['FAULTPOS'] = FAULTPOS
+        self.parameters['SUBSRATE'] = SUBSRATE
+        self.parameters['SLIPRATE'] = SLIPRATE
+        self.parameters['SS_OPT_WRAP_BOUNDARIES'] = SS_OPT_WRAP_BOUNDARIES
+        self.parameters['SS_BUFFER_WIDTH'] = SS_BUFFER_WIDTH
+        self.parameters['FOLDPROPRATE'] = FOLDPROPRATE
+        self.parameters['FOLDWAVELEN'] = FOLDWAVELEN
+        self.parameters['TIGHTENINGRATE'] = TIGHTENINGRATE
+        self.parameters['ANTICLINEXCOORD'] = ANTICLINEXCOORD
+        self.parameters['ANTICLINEYCOORD'] = ANTICLINEYCOORD
+        self.parameters['YFOLDINGSTART'] = YFOLDINGSTART
+        self.parameters['UPSUBRATIO'] = UPSUBRATIO
+        self.parameters['FOLDLATRATE'] = FOLDLATRATE
+        self.parameters['FOLDUPRATE'] = FOLDUPRATE
+        self.parameters['FOLDPOSITION'] = FOLDPOSITION
+        self.parameters['BLFALL_UPPER'] = BLFALL_UPPER
+        self.parameters['BLDIVIDINGLINE'] = BLDIVIDINGLINE
+        self.parameters['FLATDEPTH'] = FLATDEPTH
+        self.parameters['RAMPDIP'] = RAMPDIP
+        self.parameters['KINKDIP'] = KINKDIP
+        self.parameters['UPPERKINKDIP'] = UPPERKINKDIP
+        self.parameters['ACCEL_REL_UPTIME'] = ACCEL_REL_UPTIME
+        self.parameters['VERTICAL_THROW'] = VERTICAL_THROW
+        self.parameters['FAULT_PIVOT_DISTANCE'] = FAULT_PIVOT_DISTANCE
+        self.parameters['MINIMUM_UPRATE'] = MINIMUM_UPRATE
+        self.parameters['OPT_INCREASE_TO_FRONT'] = OPT_INCREASE_TO_FRONT
+        self.parameters['DECAY_PARAM_UPLIFT'] = DECAY_PARAM_UPLIFT
+        self.parameters['NUMUPLIFTMAPS'] = NUMUPLIFTMAPS
+        self.parameters['UPMAPFILENAME'] = UPMAPFILENAME
+        self.parameters['UPTIMEFILENAME'] = UPTIMEFILENAME
+        self.parameters['FRONT_PROP_RATE'] = FRONT_PROP_RATE
+        self.parameters['UPLIFT_FRONT_GRADIENT'] = UPLIFT_FRONT_GRADIENT
+        self.parameters['STARTING_YCOORD'] = STARTING_YCOORD
+        self.parameters['BLOCKEDGEPOSX'] = BLOCKEDGEPOSX
+        self.parameters['BLOCKWIDTHX'] = BLOCKWIDTHX
+        self.parameters['BLOCKEDGEPOSY'] = BLOCKEDGEPOSY
+        self.parameters['BLOCKWIDTHY'] = BLOCKWIDTHY
+        self.parameters['BLOCKMOVERATE'] = BLOCKMOVERATE
+        self.parameters['TILT_RATE'] = TILT_RATE
+        self.parameters['TILT_ORIENTATION'] = TILT_ORIENTATION
+        self.parameters['BUMP_MIGRATION_RATE'] = BUMP_MIGRATION_RATE
+        self.parameters['BUMP_INITIAL_POSITION'] = BUMP_INITIAL_POSITION
+        self.parameters['BUMP_AMPLITUDE'] = BUMP_AMPLITUDE
+        self.parameters['BUMP_WAVELENGTH'] = BUMP_WAVELENGTH
+        self.parameters['OPT_INITIAL_BUMP'] = OPT_INITIAL_BUMP
         
     def set_uniform_uplift(self,
                            UPRATE=0.001,
                            UPDUR=10000000):
         
-        self.parameter_values['OPTNOUPLIFT'] = 0
-        self.parameter_values['UPTYPE'] = 1
-        self.parameter_values['UPRATE'] = UPRATE
-        self.parameter_values['UPDUR'] = UPDUR
+        self.parameters['OPTNOUPLIFT'] = 0
+        self.parameters['UPTYPE'] = 1
+        self.parameters['UPRATE'] = UPRATE
+        self.parameters['UPDUR'] = UPDUR
         
     def set_block_uplift(self,
                          FAULTPOS,
@@ -659,12 +666,12 @@ class ChildWriter(object):
                          SUBSRATE=0,
                          UPDUR=10000000):
         
-        self.parameter_values['OPTNOUPLIFT'] = 0
-        self.parameter_values['UPTYPE'] = 2
-        self.parameter_values['FAULTPOS'] = FAULTPOS
-        self.parameter_values['UPRATE'] = UPRATE
-        self.parameter_values['SUBSRATE'] = SUBSRATE
-        self.parameter_values['UPDUR'] = UPDUR
+        self.parameters['OPTNOUPLIFT'] = 0
+        self.parameters['UPTYPE'] = 2
+        self.parameters['FAULTPOS'] = FAULTPOS
+        self.parameters['UPRATE'] = UPRATE
+        self.parameters['SUBSRATE'] = SUBSRATE
+        self.parameters['UPDUR'] = UPDUR
         
     def set_uplift_maps(self,
                         NUMUPLIFTMAPS,
@@ -672,13 +679,13 @@ class ChildWriter(object):
                         UPTIMEFILENAME='n/a',
                         UPDUR=10000000,):
         
-        self.parameter_values['OPTNOUPLIFT'] = 0
-        self.parameter_values['UPTYPE'] = 12
-        self.parameter_values['UPRATE'] = 0
-        self.parameter_values['NUMUPLIFTMAPS'] = NUMUPLIFTMAPS
-        self.parameter_values['UPMAPFILENAME'] = UPMAPFILENAME
-        self.parameter_values['UPTIMEFILENAME'] = UPTIMEFILENAME
-        self.parameter_values['UPDUR'] = UPDUR
+        self.parameters['OPTNOUPLIFT'] = 0
+        self.parameters['UPTYPE'] = 12
+        self.parameters['UPRATE'] = 0
+        self.parameters['NUMUPLIFTMAPS'] = NUMUPLIFTMAPS
+        self.parameters['UPMAPFILENAME'] = UPMAPFILENAME
+        self.parameters['UPTIMEFILENAME'] = UPTIMEFILENAME
+        self.parameters['UPDUR'] = UPDUR
         
     def set_horizontal_propagating_front(self,
                                          STARTING_YCOORD,
@@ -687,13 +694,13 @@ class ChildWriter(object):
                                          UPLIFT_FRONT_GRADIENT=0,
                                          UPDUR=10000000):
         
-        self.parameter_values['OPTNOUPLIFT'] = 0
-        self.parameter_values['UPTYPE'] = 13
-        self.parameter_values['STARTING_YCOORD'] = STARTING_YCOORD
-        self.parameter_values['UPRATE'] = UPRATE
-        self.parameter_values['FRONT_PROP_RATE'] = FRONT_PROP_RATE
-        self.parameter_values['UPLIFT_FRONT_GRADIENT'] = UPLIFT_FRONT_GRADIENT
-        self.parameter_values['UPDUR'] = UPDUR
+        self.parameters['OPTNOUPLIFT'] = 0
+        self.parameters['UPTYPE'] = 13
+        self.parameters['STARTING_YCOORD'] = STARTING_YCOORD
+        self.parameters['UPRATE'] = UPRATE
+        self.parameters['FRONT_PROP_RATE'] = FRONT_PROP_RATE
+        self.parameters['UPLIFT_FRONT_GRADIENT'] = UPLIFT_FRONT_GRADIENT
+        self.parameters['UPDUR'] = UPDUR
         
     def set_rainfall(self,
                      OPTVAR=0,
@@ -703,12 +710,12 @@ class ChildWriter(object):
                      ST_OPTSINVAR=0,
                      OPTSINVARINFILT=0):
         
-        self.parameter_values['OPTVAR'] = OPTVAR
-        self.parameter_values['ST_PMEAN'] = ST_PMEAN
-        self.parameter_values['ST_STDUR'] = ST_STDUR
-        self.parameter_values['ST_ISTDUR'] = ST_ISTDUR
-        self.parameter_values['ST_OPTSINVAR'] = ST_OPTSINVAR
-        self.parameter_values['OPTSINVARINFILT'] = OPTSINVARINFILT
+        self.parameters['OPTVAR'] = OPTVAR
+        self.parameters['ST_PMEAN'] = ST_PMEAN
+        self.parameters['ST_STDUR'] = ST_STDUR
+        self.parameters['ST_ISTDUR'] = ST_ISTDUR
+        self.parameters['ST_OPTSINVAR'] = ST_OPTSINVAR
+        self.parameters['OPTSINVARINFILT'] = OPTSINVARINFILT
         
     def set_runoff(self,
                    FLOWGEN=0,
@@ -724,18 +731,18 @@ class ChildWriter(object):
                    HYDROSHAPEFAC=1,
                    LAKEFILL=1):
 
-        self.parameter_values['FLOWGEN'] = FLOWGEN
-        self.parameter_values['TRANSMISSIVITY'] = TRANSMISSIVITY
-        self.parameter_values['OPTVAR_TRANSMISSIVITY'] = OPTVAR_TRANSMISSIVITY
-        self.parameter_values['INFILTRATION'] = INFILTRATION
-        self.parameter_values['OPTSINVARINFILT'] = OPTSINVARINFILT
-        self.parameter_values['PERIOD_INFILT'] = PERIOD_INFILT
-        self.parameter_values['MAXICMEAN'] = MAXICMEAN
-        self.parameter_values['SOILSTORE'] = SOILSTORE
-        self.parameter_values['KINWAVE_HQEXP'] = KINWAVE_HQEXP
-        self.parameter_values['FLOWVELOCITY'] = FLOWVELOCITY
-        self.parameter_values['HYDROSHAPEFAC'] = HYDROSHAPEFAC
-        self.parameter_values['LAKEFILL'] = LAKEFILL
+        self.parameters['FLOWGEN'] = FLOWGEN
+        self.parameters['TRANSMISSIVITY'] = TRANSMISSIVITY
+        self.parameters['OPTVAR_TRANSMISSIVITY'] = OPTVAR_TRANSMISSIVITY
+        self.parameters['INFILTRATION'] = INFILTRATION
+        self.parameters['OPTSINVARINFILT'] = OPTSINVARINFILT
+        self.parameters['PERIOD_INFILT'] = PERIOD_INFILT
+        self.parameters['MAXICMEAN'] = MAXICMEAN
+        self.parameters['SOILSTORE'] = SOILSTORE
+        self.parameters['KINWAVE_HQEXP'] = KINWAVE_HQEXP
+        self.parameters['FLOWVELOCITY'] = FLOWVELOCITY
+        self.parameters['HYDROSHAPEFAC'] = HYDROSHAPEFAC
+        self.parameters['LAKEFILL'] = LAKEFILL
 
     def set_hydraulic_geometry(self,
                                CHAN_GEOM_MODEL=1,
@@ -779,22 +786,22 @@ class ChildWriter(object):
         @param BANKFULLEVENT: Runoff rate associated with bankfull flood event.
                               Used to compute hydraulic geometry
         '''
-        self.parameter_values['CHAN_GEOM_MODEL'] = CHAN_GEOM_MODEL
-        self.parameter_values['HYDR_WID_COEFF_DS'] = HYDR_WID_COEFF_DS
-        self.parameter_values['HYDR_WID_EXP_DS'] = HYDR_WID_EXP_DS
-        self.parameter_values['HYDR_WID_EXP_STN'] = HYDR_WID_EXP_STN
-        self.parameter_values['HYDR_DEP_COEFF_DS'] = HYDR_DEP_COEFF_DS
-        self.parameter_values['HYDR_DEP_EXP_DS'] = HYDR_DEP_EXP_DS
-        self.parameter_values['HYDR_DEP_EXP_STN'] = HYDR_DEP_EXP_STN
-        self.parameter_values['HYDR_ROUGH_COEFF_DS'] = HYDR_ROUGH_COEFF_DS
-        self.parameter_values['HYDR_ROUGH_EXP_DS'] = HYDR_ROUGH_EXP_DS
-        self.parameter_values['HYDR_ROUGH_EXP_STN'] = HYDR_ROUGH_EXP_STN
-        self.parameter_values['HYDR_SLOPE_EXP'] = HYDR_SLOPE_EXP
-        self.parameter_values['THETAC'] = THETAC
-        self.parameter_values['SHEAR_RATIO'] = SHEAR_RATIO
-        self.parameter_values['BANK_ROUGH_COEFF'] = BANK_ROUGH_COEFF
-        self.parameter_values['BANK_ROUGH_EXP'] = BANK_ROUGH_EXP
-        self.parameter_values['BANKFULLEVENT'] = BANKFULLEVENT
+        self.parameters['CHAN_GEOM_MODEL'] = CHAN_GEOM_MODEL
+        self.parameters['HYDR_WID_COEFF_DS'] = HYDR_WID_COEFF_DS
+        self.parameters['HYDR_WID_EXP_DS'] = HYDR_WID_EXP_DS
+        self.parameters['HYDR_WID_EXP_STN'] = HYDR_WID_EXP_STN
+        self.parameters['HYDR_DEP_COEFF_DS'] = HYDR_DEP_COEFF_DS
+        self.parameters['HYDR_DEP_EXP_DS'] = HYDR_DEP_EXP_DS
+        self.parameters['HYDR_DEP_EXP_STN'] = HYDR_DEP_EXP_STN
+        self.parameters['HYDR_ROUGH_COEFF_DS'] = HYDR_ROUGH_COEFF_DS
+        self.parameters['HYDR_ROUGH_EXP_DS'] = HYDR_ROUGH_EXP_DS
+        self.parameters['HYDR_ROUGH_EXP_STN'] = HYDR_ROUGH_EXP_STN
+        self.parameters['HYDR_SLOPE_EXP'] = HYDR_SLOPE_EXP
+        self.parameters['THETAC'] = THETAC
+        self.parameters['SHEAR_RATIO'] = SHEAR_RATIO
+        self.parameters['BANK_ROUGH_COEFF'] = BANK_ROUGH_COEFF
+        self.parameters['BANK_ROUGH_EXP'] = BANK_ROUGH_EXP
+        self.parameters['BANKFULLEVENT'] = BANKFULLEVENT
         
     def set_meandering(self,
                        OPTMEANDER=0,
@@ -808,25 +815,25 @@ class ChildWriter(object):
                        FRAC_WID_MOVE=0.1,
                        FRAC_WID_ADD=0.7):
         
-        self.parameter_values['OPTMEANDER'] = OPTMEANDER
-        self.parameter_values['CRITICAL_AREA'] = CRITICAL_AREA
-        # self.parameter_values['CRITICAL_FLOW'] = CRITICAL_FLOW
-        self.parameter_values['OPT_VAR_SIZE'] = OPT_VAR_SIZE
-        self.parameter_values['MEDIAN_DIAMETER'] = MEDIAN_DIAMETER
-        self.parameter_values['BANKERO'] = BANKERO
-        self.parameter_values['BNKHTDEP'] = BNKHTDEP
-        self.parameter_values['DEF_CHAN_DISCR'] = DEF_CHAN_DISCR
-        self.parameter_values['FRAC_WID_MOVE'] = FRAC_WID_MOVE
-        self.parameter_values['FRAC_WID_ADD'] = FRAC_WID_ADD
+        self.parameters['OPTMEANDER'] = OPTMEANDER
+        self.parameters['CRITICAL_AREA'] = CRITICAL_AREA
+        # self.parameters['CRITICAL_FLOW'] = CRITICAL_FLOW
+        self.parameters['OPT_VAR_SIZE'] = OPT_VAR_SIZE
+        self.parameters['MEDIAN_DIAMETER'] = MEDIAN_DIAMETER
+        self.parameters['BANKERO'] = BANKERO
+        self.parameters['BNKHTDEP'] = BNKHTDEP
+        self.parameters['DEF_CHAN_DISCR'] = DEF_CHAN_DISCR
+        self.parameters['FRAC_WID_MOVE'] = FRAC_WID_MOVE
+        self.parameters['FRAC_WID_ADD'] = FRAC_WID_ADD
         
     def set_materials(self,
                       ROCKDENSITYINIT=2270,
                       SOILBULKDENSITY=740,
                       WOODDENSITY=450):
         
-        self.parameter_values['ROCKDENSITYINIT'] = ROCKDENSITYINIT
-        self.parameter_values['SOILBULKDENSITY'] = SOILBULKDENSITY
-        self.parameter_values['WOODDENSITY'] = WOODDENSITY
+        self.parameters['ROCKDENSITYINIT'] = ROCKDENSITYINIT
+        self.parameters['SOILBULKDENSITY'] = SOILBULKDENSITY
+        self.parameters['WOODDENSITY'] = WOODDENSITY
         
     def set_grainsize(self,
                       NUMGRNSIZE=1,
@@ -836,15 +843,15 @@ class ChildWriter(object):
                       HIDINGEXP=0.75,
                       GRAINDIAM0=0.007):
         
-        self.parameter_values['NUMGRNSIZE'] = NUMGRNSIZE
+        self.parameters['NUMGRNSIZE'] = NUMGRNSIZE
         for i, br_proportion in enumerate(BRPROPORTIONi):
-            self.parameter_values['BRPROPORTION' + str(i + 1)] = br_proportion
+            self.parameters['BRPROPORTION' + str(i + 1)] = br_proportion
         for i, reg_proportion in enumerate(REGPROPORTIONi):
-            self.parameter_values['REGPROPORTION' + str(i + 1)] = reg_proportion
+            self.parameters['REGPROPORTION' + str(i + 1)] = reg_proportion
         for i, grain_diam in enumerate(GRAINDIAMi):
-            self.parameter_values['GRAINDIAM' + str(i + 1)] = grain_diam
-        self.parameter_values['HIDINGEXP'] = HIDINGEXP
-        self.parameter_values['GRAINDIAM0'] = GRAINDIAM0
+            self.parameters['GRAINDIAM' + str(i + 1)] = grain_diam
+        self.parameters['HIDINGEXP'] = HIDINGEXP
+        self.parameters['GRAINDIAM0'] = GRAINDIAM0
 
     def set_fluvial_transport(self,
                               OPTNOFLUVIAL=0,
@@ -904,23 +911,23 @@ class ChildWriter(object):
         @param NF: Slope exponent in fluvial transport capacity equation
         @param PF: Excess power/shear exponent in fluvial transport capacity equation
         '''
-        self.parameter_values['OPTNOFLUVIAL'] = OPTNOFLUVIAL
-        self.parameter_values['DETACHMENT_LAW'] = DETACHMENT_LAW
-        self.parameter_values['KB'] = KB
-        self.parameter_values['KR'] = KR
-        self.parameter_values['KT'] = KT
-        self.parameter_values['MB'] = MB
-        self.parameter_values['NB'] = NB
-        self.parameter_values['PB'] = PB
-        self.parameter_values['TAUCB'] = TAUCB
-        self.parameter_values['TAUCR'] = TAUCR
-        self.parameter_values['BETA'] = BETA
-        self.parameter_values['OPTDETACHLIM'] = OPTDETACHLIM
-        self.parameter_values['TRANSPORT_LAW'] = TRANSPORT_LAW
-        self.parameter_values['KF'] = KF
-        self.parameter_values['MF'] = MF
-        self.parameter_values['NF'] = NF
-        self.parameter_values['PF'] = PF
+        self.parameters['OPTNOFLUVIAL'] = OPTNOFLUVIAL
+        self.parameters['DETACHMENT_LAW'] = DETACHMENT_LAW
+        self.parameters['KB'] = KB
+        self.parameters['KR'] = KR
+        self.parameters['KT'] = KT
+        self.parameters['MB'] = MB
+        self.parameters['NB'] = NB
+        self.parameters['PB'] = PB
+        self.parameters['TAUCB'] = TAUCB
+        self.parameters['TAUCR'] = TAUCR
+        self.parameters['BETA'] = BETA
+        self.parameters['OPTDETACHLIM'] = OPTDETACHLIM
+        self.parameters['TRANSPORT_LAW'] = TRANSPORT_LAW
+        self.parameters['KF'] = KF
+        self.parameters['MF'] = MF
+        self.parameters['NF'] = NF
+        self.parameters['PF'] = PF
 
     def set_detachment_power_law_form_1(self,
                                         KB=0.0005,
@@ -932,16 +939,16 @@ class ChildWriter(object):
                                         TAUCB=30,
                                         TAUCR=30):
         
-        self.parameter_values['OPTNOFLUVIAL'] = 0
-        self.parameter_values['DETACHMENT_LAW'] = 0
-        self.parameter_values['KB'] = KB
-        self.parameter_values['KR'] = KR
-        self.parameter_values['KT'] = KT
-        self.parameter_values['MB'] = MB
-        self.parameter_values['NB'] = NB
-        self.parameter_values['PB'] = PB
-        self.parameter_values['TAUCB'] = TAUCB
-        self.parameter_values['TAUCR'] = TAUCR
+        self.parameters['OPTNOFLUVIAL'] = 0
+        self.parameters['DETACHMENT_LAW'] = 0
+        self.parameters['KB'] = KB
+        self.parameters['KR'] = KR
+        self.parameters['KT'] = KT
+        self.parameters['MB'] = MB
+        self.parameters['NB'] = NB
+        self.parameters['PB'] = PB
+        self.parameters['TAUCB'] = TAUCB
+        self.parameters['TAUCR'] = TAUCR
 
     def set_detachment_power_law_form_2(self,
                                         KB=0.0005,
@@ -953,16 +960,16 @@ class ChildWriter(object):
                                         TAUCB=30,
                                         TAUCR=30):
         
-        self.parameter_values['OPTNOFLUVIAL'] = 0
-        self.parameter_values['DETACHMENT_LAW'] = 1
-        self.parameter_values['KB'] = KB
-        self.parameter_values['KR'] = KR
-        self.parameter_values['KT'] = KT
-        self.parameter_values['MB'] = MB
-        self.parameter_values['NB'] = NB
-        self.parameter_values['PB'] = PB
-        self.parameter_values['TAUCB'] = TAUCB
-        self.parameter_values['TAUCR'] = TAUCR
+        self.parameters['OPTNOFLUVIAL'] = 0
+        self.parameters['DETACHMENT_LAW'] = 1
+        self.parameters['KB'] = KB
+        self.parameters['KR'] = KR
+        self.parameters['KT'] = KT
+        self.parameters['MB'] = MB
+        self.parameters['NB'] = NB
+        self.parameters['PB'] = PB
+        self.parameters['TAUCB'] = TAUCB
+        self.parameters['TAUCR'] = TAUCR
 
     def set_detachment_almost_parabolic_law(self,
                                             KB=1e-4,
@@ -971,13 +978,13 @@ class ChildWriter(object):
                                             NB=1,
                                             BETA=1):
         
-        self.parameter_values['OPTNOFLUVIAL'] = 0
-        self.parameter_values['DETACHMENT_LAW'] = 2
-        self.parameter_values['KB'] = KB
-        self.parameter_values['KR'] = KR
-        self.parameter_values['MB'] = MB
-        self.parameter_values['NB'] = NB
-        self.parameter_values['BETA'] = BETA
+        self.parameters['OPTNOFLUVIAL'] = 0
+        self.parameters['DETACHMENT_LAW'] = 2
+        self.parameters['KB'] = KB
+        self.parameters['KR'] = KR
+        self.parameters['MB'] = MB
+        self.parameters['NB'] = NB
+        self.parameters['BETA'] = BETA
 
     def set_detachment_generalized_fqs_law(self,
                                            KB=1e-4,
@@ -986,18 +993,18 @@ class ChildWriter(object):
                                            NB=1,
                                            BETA=1):
         
-        self.parameter_values['OPTNOFLUVIAL'] = 0
-        self.parameter_values['DETACHMENT_LAW'] = 3
-        self.parameter_values['KB'] = KB
-        self.parameter_values['KR'] = KR
-        self.parameter_values['MB'] = MB
-        self.parameter_values['NB'] = NB
-        self.parameter_values['BETA'] = BETA
+        self.parameters['OPTNOFLUVIAL'] = 0
+        self.parameters['DETACHMENT_LAW'] = 3
+        self.parameters['KB'] = KB
+        self.parameters['KR'] = KR
+        self.parameters['MB'] = MB
+        self.parameters['NB'] = NB
+        self.parameters['BETA'] = BETA
 
     def set_detachment_dummy_law(self):
         
-        self.parameter_values['OPTNOFLUVIAL'] = 0
-        self.parameter_values['DETACHMENT_LAW'] = 4
+        self.parameters['OPTNOFLUVIAL'] = 0
+        self.parameters['DETACHMENT_LAW'] = 4
 
     def set_transport_law(self,
                           OPTDETACHLIM=0,
@@ -1007,13 +1014,13 @@ class ChildWriter(object):
                           NF=0.66667,
                           PF=1.5):
         
-        self.parameter_values['OPTNOFLUVIAL'] = 0
-        self.parameter_values['OPTDETACHLIM'] = OPTDETACHLIM
-        self.parameter_values['TRANSPORT_LAW'] = TRANSPORT_LAW
-        self.parameter_values['KF'] = KF
-        self.parameter_values['MF'] = MF
-        self.parameter_values['NF'] = NF
-        self.parameter_values['PF'] = PF
+        self.parameters['OPTNOFLUVIAL'] = 0
+        self.parameters['OPTDETACHLIM'] = OPTDETACHLIM
+        self.parameters['TRANSPORT_LAW'] = TRANSPORT_LAW
+        self.parameters['KF'] = KF
+        self.parameters['MF'] = MF
+        self.parameters['NF'] = NF
+        self.parameters['PF'] = PF
         
     def set_overbank_deposition(self,
                                 OPTFLOODPLAIN=0,
@@ -1027,14 +1034,14 @@ class ChildWriter(object):
         
         # HYDR_DEP_COEFF_DS, HYDR_DEP_EXP_STN, HYDR_DEP_EXP_DS, NUMGRNSIZE
         
-        self.parameter_values['OPTFLOODPLAIN'] = OPTFLOODPLAIN
-        self.parameter_values['FP_DRAREAMIN'] = FP_DRAREAMIN
-        self.parameter_values['FP_BANKFULLEVENT'] = FP_BANKFULLEVENT
-        self.parameter_values['FP_MU'] = FP_MU
-        self.parameter_values['FP_LAMBDA'] = FP_LAMBDA
-        self.parameter_values['FP_OPTCONTROLCHAN'] = FP_OPTCONTROLCHAN
-        self.parameter_values['FP_VALDROP'] = FP_VALDROP
-        self.parameter_values['FP_INLET_ELEVATION'] = FP_INLET_ELEVATION
+        self.parameters['OPTFLOODPLAIN'] = OPTFLOODPLAIN
+        self.parameters['FP_DRAREAMIN'] = FP_DRAREAMIN
+        self.parameters['FP_BANKFULLEVENT'] = FP_BANKFULLEVENT
+        self.parameters['FP_MU'] = FP_MU
+        self.parameters['FP_LAMBDA'] = FP_LAMBDA
+        self.parameters['FP_OPTCONTROLCHAN'] = FP_OPTCONTROLCHAN
+        self.parameters['FP_VALDROP'] = FP_VALDROP
+        self.parameters['FP_INLET_ELEVATION'] = FP_INLET_ELEVATION
         
     def set_hillslope_transport(self,
                                 OPTNODIFFUSION=0,
@@ -1046,14 +1053,14 @@ class ChildWriter(object):
                                 DIFFDEPTHSCALE=1,
                                 CRITICAL_SLOPE=0.5774):
         
-        self.parameter_values['OPTNODIFFUSION'] = OPTNODIFFUSION
-        self.parameter_values['KD'] = KD
-        self.parameter_values['OPTDIFFDEP'] = OPTDIFFDEP
-        self.parameter_values['DIFFUSIONTHRESHOLD'] = DIFFUSIONTHRESHOLD
-        self.parameter_values['OPT_NONLINEAR_DIFFUSION'] = OPT_NONLINEAR_DIFFUSION
-        self.parameter_values['OPT_DEPTH_DEPENDENT_DIFFUSION'] = OPT_DEPTH_DEPENDENT_DIFFUSION
-        self.parameter_values['DIFFDEPTHSCALE'] = DIFFDEPTHSCALE
-        self.parameter_values['CRITICAL_SLOPE'] = CRITICAL_SLOPE
+        self.parameters['OPTNODIFFUSION'] = OPTNODIFFUSION
+        self.parameters['KD'] = KD
+        self.parameters['OPTDIFFDEP'] = OPTDIFFDEP
+        self.parameters['DIFFUSIONTHRESHOLD'] = DIFFUSIONTHRESHOLD
+        self.parameters['OPT_NONLINEAR_DIFFUSION'] = OPT_NONLINEAR_DIFFUSION
+        self.parameters['OPT_DEPTH_DEPENDENT_DIFFUSION'] = OPT_DEPTH_DEPENDENT_DIFFUSION
+        self.parameters['DIFFDEPTHSCALE'] = DIFFDEPTHSCALE
+        self.parameters['CRITICAL_SLOPE'] = CRITICAL_SLOPE
         
     def set_landsliding(self,
                         OPT_LANDSLIDES=0,
@@ -1065,19 +1072,19 @@ class ChildWriter(object):
         
 #         print('Landsliding also requires ROCKDENSITYINIT and WOODDENSITY (see material_parameters)')
         
-        self.parameter_values['OPT_LANDSLIDES'] = OPT_LANDSLIDES
-        self.parameter_values['OPT_3D_LANDSLIDES'] = OPT_3D_LANDSLIDES
-        self.parameter_values['FRICSLOPE'] = FRICSLOPE
-        self.parameter_values['DF_RUNOUT_RULE'] = DF_RUNOUT_RULE
-        self.parameter_values['DF_SCOUR_RULE'] = DF_SCOUR_RULE
-        self.parameter_values['DF_DEPOSITION_RULE'] = DF_DEPOSITION_RULE
+        self.parameters['OPT_LANDSLIDES'] = OPT_LANDSLIDES
+        self.parameters['OPT_3D_LANDSLIDES'] = OPT_3D_LANDSLIDES
+        self.parameters['FRICSLOPE'] = FRICSLOPE
+        self.parameters['DF_RUNOUT_RULE'] = DF_RUNOUT_RULE
+        self.parameters['DF_SCOUR_RULE'] = DF_SCOUR_RULE
+        self.parameters['DF_DEPOSITION_RULE'] = DF_DEPOSITION_RULE
         
     def set_eolian_deposition(self,
                               OPTLOESSDEP=0,
                               LOESS_DEP_RATE=0):
         
-        self.parameter_values['OPTLOESSDEP'] = OPTLOESSDEP
-        self.parameter_values['LOESS_DEP_RATE'] = LOESS_DEP_RATE
+        self.parameters['OPTLOESSDEP'] = OPTLOESSDEP
+        self.parameters['LOESS_DEP_RATE'] = LOESS_DEP_RATE
 
     def set_weathering(self,
                        CHEM_WEATHERING_LAW=0,
@@ -1091,14 +1098,14 @@ class ChildWriter(object):
         
 #         print('Weathering also requires ROCKDENSITYINIT and SOILBULKDENSITY (see material_parameters)')
         
-        self.parameter_values['CHEM_WEATHERING_LAW'] = CHEM_WEATHERING_LAW
-        self.parameter_values['MAXDISSOLUTIONRATE'] = MAXDISSOLUTIONRATE
-        self.parameter_values['CHEMDEPTH'] = CHEMDEPTH
-        self.parameter_values['PRODUCTION_LAW'] = PRODUCTION_LAW
-        self.parameter_values['SOILPRODRATE'] = SOILPRODRATE
-        self.parameter_values['SOILPRODRATEINTERCEPT'] = SOILPRODRATEINTERCEPT
-        self.parameter_values['SOILPRODRATESLOPE'] = SOILPRODRATESLOPE
-        self.parameter_values['SOILPRODDEPTH'] = SOILPRODDEPTH
+        self.parameters['CHEM_WEATHERING_LAW'] = CHEM_WEATHERING_LAW
+        self.parameters['MAXDISSOLUTIONRATE'] = MAXDISSOLUTIONRATE
+        self.parameters['CHEMDEPTH'] = CHEMDEPTH
+        self.parameters['PRODUCTION_LAW'] = PRODUCTION_LAW
+        self.parameters['SOILPRODRATE'] = SOILPRODRATE
+        self.parameters['SOILPRODRATEINTERCEPT'] = SOILPRODRATEINTERCEPT
+        self.parameters['SOILPRODRATESLOPE'] = SOILPRODRATESLOPE
+        self.parameters['SOILPRODDEPTH'] = SOILPRODDEPTH
         
     def set_vegetation(self,
                        OPTVEG=0,
@@ -1110,12 +1117,12 @@ class ChildWriter(object):
         
 #         print('Forest also requires OPTFOREST (see forest_parameters) and OPTFIRE (see fire_parameters)')
                 
-        self.parameter_values['OPTVEG'] = OPTVEG
-        self.parameter_values['OPTGRASS_SIMPLE'] = OPTGRASS_SIMPLE
-        self.parameter_values['VEG_KVD'] = VEG_KVD
-        self.parameter_values['VEG_TV'] = VEG_TV
-        self.parameter_values['TAUC'] = TAUC
-        self.parameter_values['VEG_TAUCVEG'] = VEG_TAUCVEG
+        self.parameters['OPTVEG'] = OPTVEG
+        self.parameters['OPTGRASS_SIMPLE'] = OPTGRASS_SIMPLE
+        self.parameters['VEG_KVD'] = VEG_KVD
+        self.parameters['VEG_TV'] = VEG_TV
+        self.parameters['TAUC'] = TAUC
+        self.parameters['VEG_TAUCVEG'] = VEG_TAUCVEG
         
     def set_forest(self,
                    OPTFOREST=0,
@@ -1146,29 +1153,29 @@ class ChildWriter(object):
         
 #         print('Forest also requires WOODDENSITY (see material_parameters) and FSEED (see run_control_parameters)')
         
-        self.parameter_values['OPTFOREST'] = OPTFOREST
-        self.parameter_values['ROOTDECAY_K'] = ROOTDECAY_K
-        self.parameter_values['ROOTDECAY_N'] = ROOTDECAY_N
-        self.parameter_values['ROOTGROWTH_A'] = ROOTGROWTH_A
-        self.parameter_values['ROOTGROWTH_B'] = ROOTGROWTH_B
-        self.parameter_values['ROOTGROWTH_C'] = ROOTGROWTH_C
-        self.parameter_values['ROOTGROWTH_F'] = ROOTGROWTH_F
-        self.parameter_values['ROOTSTRENGTH_J'] = ROOTSTRENGTH_J
-        self.parameter_values['MAXVERTROOTCOHESION'] = MAXVERTROOTCOHESION
-        self.parameter_values['MAXLATROOTCOHESION'] = MAXLATROOTCOHESION
-        self.parameter_values['TREEHEIGHTINDEX'] = TREEHEIGHTINDEX
-        self.parameter_values['VEGWEIGHT_MAX'] = VEGWEIGHT_MAX
-        self.parameter_values['VEGWEIGHT_A'] = VEGWEIGHT_A
-        self.parameter_values['VEGWEIGHT_B'] = VEGWEIGHT_B
-        self.parameter_values['VEGWEIGHT_C'] = VEGWEIGHT_C
-        self.parameter_values['VEGWEIGHT_K'] = VEGWEIGHT_K
-        self.parameter_values['BLOWDOWNPARAM'] = BLOWDOWNPARAM
-        self.parameter_values['BLOW_SEED'] = BLOW_SEED
-        self.parameter_values['TREEDIAM_B0'] = TREEDIAM_B0
-        self.parameter_values['TREEDIAM_B1'] = TREEDIAM_B1
-        self.parameter_values['TREEDIAM_B2'] = TREEDIAM_B2
-        self.parameter_values['WOODDECAY_K'] = WOODDECAY_K
-        self.parameter_values['INITSTANDAGE'] = INITSTANDAGE
+        self.parameters['OPTFOREST'] = OPTFOREST
+        self.parameters['ROOTDECAY_K'] = ROOTDECAY_K
+        self.parameters['ROOTDECAY_N'] = ROOTDECAY_N
+        self.parameters['ROOTGROWTH_A'] = ROOTGROWTH_A
+        self.parameters['ROOTGROWTH_B'] = ROOTGROWTH_B
+        self.parameters['ROOTGROWTH_C'] = ROOTGROWTH_C
+        self.parameters['ROOTGROWTH_F'] = ROOTGROWTH_F
+        self.parameters['ROOTSTRENGTH_J'] = ROOTSTRENGTH_J
+        self.parameters['MAXVERTROOTCOHESION'] = MAXVERTROOTCOHESION
+        self.parameters['MAXLATROOTCOHESION'] = MAXLATROOTCOHESION
+        self.parameters['TREEHEIGHTINDEX'] = TREEHEIGHTINDEX
+        self.parameters['VEGWEIGHT_MAX'] = VEGWEIGHT_MAX
+        self.parameters['VEGWEIGHT_A'] = VEGWEIGHT_A
+        self.parameters['VEGWEIGHT_B'] = VEGWEIGHT_B
+        self.parameters['VEGWEIGHT_C'] = VEGWEIGHT_C
+        self.parameters['VEGWEIGHT_K'] = VEGWEIGHT_K
+        self.parameters['BLOWDOWNPARAM'] = BLOWDOWNPARAM
+        self.parameters['BLOW_SEED'] = BLOW_SEED
+        self.parameters['TREEDIAM_B0'] = TREEDIAM_B0
+        self.parameters['TREEDIAM_B1'] = TREEDIAM_B1
+        self.parameters['TREEDIAM_B2'] = TREEDIAM_B2
+        self.parameters['WOODDECAY_K'] = WOODDECAY_K
+        self.parameters['INITSTANDAGE'] = INITSTANDAGE
 
     def set_fire(self,
                  OPTFIRE=0,
@@ -1177,9 +1184,9 @@ class ChildWriter(object):
         
 #         print('Fire also requires FSEED (see run_control_parameters)')
         
-        self.parameter_values['OPTFIRE'] = OPTFIRE
-        self.parameter_values['IFRDUR'] = IFRDUR
-        self.parameter_values['OPTRANDOMFIRES'] = OPTRANDOMFIRES
+        self.parameters['OPTFIRE'] = OPTFIRE
+        self.parameters['IFRDUR'] = IFRDUR
+        self.parameters['OPTRANDOMFIRES'] = OPTRANDOMFIRES
 
     def set_various(self,
                     OPTTSOUTPUT=1,
@@ -1191,31 +1198,48 @@ class ChildWriter(object):
                     OPT_FREEZE_ELEVATIONS=0,
                     OPTSTREAMLINEBNDY=0):
         
-        self.parameter_values['OPTTSOUTPUT'] = OPTTSOUTPUT
-        self.parameter_values['TSOPINTRVL'] = TSOPINTRVL
-        self.parameter_values['SURFER'] = SURFER
-        self.parameter_values['OPTEXPOSURETIME'] = OPTEXPOSURETIME
-        self.parameter_values['OPTFOLDDENS'] = OPTFOLDDENS
-        self.parameter_values['OPT_TRACK_WATER_SED_TIMESERIES'] = OPT_TRACK_WATER_SED_TIMESERIES
-        self.parameter_values['OPT_FREEZE_ELEVATIONS'] = OPT_FREEZE_ELEVATIONS
-        self.parameter_values['OPTSTREAMLINEBNDY'] = OPTSTREAMLINEBNDY
- 
+        self.parameters['OPTTSOUTPUT'] = OPTTSOUTPUT
+        self.parameters['TSOPINTRVL'] = TSOPINTRVL
+        self.parameters['SURFER'] = SURFER
+        self.parameters['OPTEXPOSURETIME'] = OPTEXPOSURETIME
+        self.parameters['OPTFOLDDENS'] = OPTFOLDDENS
+        self.parameters['OPT_TRACK_WATER_SED_TIMESERIES'] = OPT_TRACK_WATER_SED_TIMESERIES
+        self.parameters['OPT_FREEZE_ELEVATIONS'] = OPT_FREEZE_ELEVATIONS
+        self.parameters['OPTSTREAMLINEBNDY'] = OPTSTREAMLINEBNDY
+
+    def solve_parameter(self, parameter, realization, value):
+        
+        if parameter == 'OUTFILENAME':
+            if self.nb_realizations > 1:
+                value += '_' + str(realization + 1)
+            self.parameter_values[realization][parameter] = value
+        elif isinstance(value, (stats._distn_infrastructure.rv_frozen, RangeModel, MixtureModel, MemoryModel)) == True:
+            self.parameter_values[realization][parameter] = value.rvs()
+        elif isinstance(value, LinearTimeSeries) == True:
+            self.parameter_values[realization][parameter] = value.write()
+        elif isinstance(value, FloodplainTimeSeries) == True:
+            self.parameter_values[realization][parameter] = value.write(parameter_name,
+                                                                        base_name=self.parameter_values[realization]['OUTFILENAME'])
+        else:
+            self.parameter_values[realization][parameter] = value
+
+    def solve_parameters(self):
+
+        self.parameter_values = [OrderedDict() for r in range(self.nb_realizations)]
+
+        for r in range(self.nb_realizations):
+
+            np.random.seed(self.seed + r + 1)
+
+            for parameter in self.parameters:
+                self.solve_parameter(parameter, r, self.parameters[parameter])
+
     def write_parameter(self, input_file, parameter, value, parameter_name=None):
         
         if parameter_name is None:
             parameter_name = parameter
         input_file.write(parameter_name + ': ' + self.parameter_descriptions[parameter] + '\n')
-        str_value = value
-        if isinstance(value, (int, float)) == True:
-            str_value = str(value)
-        elif isinstance(value, (stats._distn_infrastructure.rv_frozen, MixtureModel, MemoryModel)) == True:
-            str_value = str(value.rvs())
-        elif isinstance(value, LinearTimeSeries) == True:
-            str_value = value.write()
-        elif isinstance(value, FloodplainTimeSeries) == True:
-            str_value = value.write(parameter_name,
-                                    base_name=self.parameter_values['OUTFILENAME'])
-        input_file.write(str_value + '\n')
+        input_file.write(str(value) + '\n')
         
     def write_header(self, input_file, outfile_name, description, line_size):
         
@@ -1223,315 +1247,52 @@ class ChildWriter(object):
         input_file.write('#\n')
         input_file.write(divide_line(outfile_name + '.in: ' + description, line_size))
         input_file.write('#' + (line_size - 1)*'-' + '\n')
-        
-    def write_run_header(self, line_size):
-        
-        self.input_file.write('#\n')
-        self.input_file.write('#   Run control parameters\n')
-        self.input_file.write('#\n')
-        self.input_file.write(divide_line('The following parameters control the name and duration of the run along with a couple of other general settings.', line_size))
-        self.input_file.write('#\n')
-        
-    def write_mesh_header(self, line_size):
-        
-        self.input_file.write('#\n')
-        self.input_file.write('#   Mesh setup parameters\n')
-        self.input_file.write('#\n')
-        self.input_file.write(divide_line('These parameters control the initial configuration of the mesh. Here you specify whether a new or existing mesh is to be used; the geometry and resolution of a new mesh (if applicable); the boundary settings; etc.', line_size))
-        self.input_file.write('#\n')
-        self.input_file.write('#    Notes:\n')
-        self.input_file.write('#\n')
-        self.input_file.write('#      OPTREADINPUT - controls the source of the initial mesh setup:\n')
-        self.input_file.write('#                      0 = create a new mesh in a rectangular domain\n')
-        self.input_file.write('#                      1 = read in an existing triangulation (eg, earlier run)\n')
-        self.input_file.write('#                      2 = create a new mesh by triangulating a given set\n')
-        self.input_file.write('#                        of (x,y,z,b) points\n')
-        self.input_file.write('#      INPUTDATAFILE - use this only if you want to read in an existing\n')
-        self.input_file.write('#                      triangulation, either from an earlier run or from\n')
-        self.input_file.write('#                      a dataset.\n')
-        self.input_file.write('#      INPUTTIME - if reading in a mesh from an earlier run, this specifies\n')
-        self.input_file.write('#                      the time slice number\n')
-        self.input_file.write('#\n')
-        
-    def write_climate_header(self, line_size):
-        
-        self.input_file.write('#\n')
-        self.input_file.write('#   Climate parameters\n')
-        self.input_file.write('#\n')
-        
-    def write_various_header(self, line_size):
-        
-        self.input_file.write('#\n')
-        self.input_file.write('#   Various options\n')
-        self.input_file.write('#\n')
-        
-    def write_sediment_header(self, line_size):
-        
-        self.input_file.write('#\n')
-        self.input_file.write('#   Erosion and sediment transport parameters\n')
-        self.input_file.write('#   (note: choice of sediment-transport law is dictated at compile-time;\n')
-        self.input_file.write('#    see tErosion.h)\n')
-        self.input_file.write('#\n')
-        self.input_file.write('#   Important notes on parameters:\n')
-        self.input_file.write('#\n')
-        self.input_file.write('#   (1) kb, kt, mb, nb and pb are defined as follows:\n')
-        self.input_file.write('#         E = kb * ( tau - taucrit ) ^ pb,\n')
-        self.input_file.write('#         tau = kt * q ^ mb * S ^ nb,\n')
-        self.input_file.write('#         q = Q / W,  W = Wb ( Q / Qb ) ^ ws,  Wb = kw Qb ^ wb\n')
-        self.input_file.write('#      where W is width, Q total discharge, Qb bankfull discharge,\n')
-        self.input_file.write('#      Wb bankfull width. Note that kb, mb and nb are NOT the same as the\n')
-        self.input_file.write('#      "familiar" K, m, and n as sometimes used in the literature.\n')
-        self.input_file.write('#\n')
-        self.input_file.write('#   (2) For power-law sediment transport, parameters are defined as follows:\n')
-        self.input_file.write('#         capacity (m3/yr) = kf * W * ( tau - taucrit ) ^ pf\n')
-        self.input_file.write('#         tau = kt * q ^ mf * S ^ nf\n')
-        self.input_file.write('#         q is as defined above\n')
-        self.input_file.write('#\n')
-        self.input_file.write('#   (3) KT and TAUC are given in SI units -- that is, time units of seconds\n')
-        self.input_file.write('#       rather than years. The unit conversion to erosion rate or capacity\n')
-        self.input_file.write('#       is made within the code.\n')
-        self.input_file.write('#\n')
-    
-    def write_meandering_header(self, line_size):
-        
-        self.input_file.write('#\n')
-        self.input_file.write('#   Meandering parameters\n')
-        self.input_file.write('#\n')
-        
-    def write_landsliding_header(self, line_size):
-        
-        self.input_file.write('#\n')
-        self.input_file.write('#   Landsliding parameters\n')
-        self.input_file.write('#\n')
-        
-    def write_floodplain_header(self, line_size):
-        
-        self.input_file.write('#\n')
-        self.input_file.write('#   Floodplain parameters\n')
-        self.input_file.write('#\n')
-        
-    def write_eolian_header(self, line_size):
-        
-        self.input_file.write('#\n')
-        self.input_file.write('#   Eolian parameters\n')
-        self.input_file.write('#\n')
-        
-    def write_bedrock_header(self, line_size):
-        
-        self.input_file.write('#\n')
-        self.input_file.write('#   Bedrock and regolith\n')
-        self.input_file.write('#\n')
-        
-    def write_lithology_header(self, line_size):
-        
-        self.input_file.write('#\n')
-        self.input_file.write('#   Lithology\n')
-        self.input_file.write('#\n')
-        
-    def write_weathering_header(self, line_size):
-        
-        self.input_file.write('#\n')
-        self.input_file.write('#   Chemical and physical weathering\n')
-        self.input_file.write('#\n')
-        
-    def write_tectonics_header(self, line_size):
-        
-        self.input_file.write('#\n')
-        self.input_file.write('#   Tectonics / baselevel boundary conditions\n')
-        self.input_file.write('#\n')
-        
-    def write_grainsize_header(self, line_size):
-        
-        self.input_file.write('#\n')
-        self.input_file.write('#   Grain size parameters\n')
-        self.input_file.write('#\n')
-        self.input_file.write('#   (note: for Wilcock sand-gravel transport formula, NUMGRNSIZE must be 2;\n')
-        self.input_file.write('#    otherwise, NUMGRNSIZE must be 1. Grain diameter has no effect if the\n')
-        self.input_file.write('#    Wilcock model is not used.)\n')
-        self.input_file.write('#\n')
-        
-    def write_hydraulic_header(self, line_size):
-        
-        self.input_file.write('#\n')
-        self.input_file.write('#   Hydraulic geometry parameters\n')
-        self.input_file.write('#\n')
-        self.input_file.write('#   Width is the most critical parameter as it is used in erosion and\n')
-        self.input_file.write('#   transport capacity calculations. HYDR_WID_COEFF_DS is the "kw" parameter\n')
-        self.input_file.write('#   referred to above (equal to bankfull width in m at unit bankfull discharge\n')
-        self.input_file.write('#   in cms)\n')
-        self.input_file.write('#\n')
-        self.input_file.write('#   CHAN_GEOM_MODEL options are:\n')
-        self.input_file.write('#     1 = empirical "regime" model: Wb = Kw Qb ^ wb, W / Wb = ( Q / Qb ) ^ ws\n')
-        self.input_file.write('#     2 = Parker width closure: tau / tauc = const\n')
-        self.input_file.write('#\n')
-        
-    def write_fire_header(self, line_size):
-        
-        self.input_file.write('#\n')
-        self.input_file.write('#   Fire parameters\n')
-        self.input_file.write('#\n')
-
-    def write_forest_header(self, line_size):
-        
-        self.input_file.write('#\n')
-        self.input_file.write('#   Forest parameters\n')
-        self.input_file.write('#\n')
-        
-    def write_vegetation_header(self, line_size):
-        
-        self.input_file.write('#\n')
-        self.input_file.write('#   Vegetation parameters\n')
-        self.input_file.write('#\n')
-        
-    def write_stratgrid_header(self, line_size):
-        
-        self.input_file.write('#\n')
-        self.input_file.write('#   StratGrid parameters\n')
-        self.input_file.write('#\n')
-        
-    def write_other_header(self, line_size):
-        
-        self.input_file.write('#\n')
-        self.input_file.write('#   Other options\n')
-        self.input_file.write('#\n')
 
     def write_input_file(self, COMMENTS=None):
 
         line_size = 68
 
-        with open(os.path.join(self.base_directory,
-                               self.parameter_values['OUTFILENAME'] + '.in'),
-                  'w') as input_file:
-            
-            self.write_header(input_file,self.parameter_values['OUTFILENAME'],
-                              self.DESCRIPTION,
-                              line_size)
-            for parameter in self.parameter_values:
-                description_key = parameter
-                if description_key[-1].isdigit() == True and description_key[:-1] != 'TREEDIAM_B':
-                    description_key = description_key[:-1] + 'i'
-                self.write_parameter(input_file,description_key,
-                                     self.parameter_values[parameter],
-                                     parameter_name=parameter)
-            input_file.write('\n')
-            input_file.write('Comments here:\n')
-            input_file.write('\n')
-            if COMMENTS is not None:
-                input_file.write(divide_line(COMMENTS, line_size))
+        if self.parameter_values is None:
+            self.solve_parameters()
 
-    def locate_input_file(self):
-        
-        return os.path.join(self.base_directory,
-                            self.parameter_values['OUTFILENAME'] + '.in')
-    
-    def get_base_name(self):
-        
-        return os.path.join(self.base_directory,
-                            self.parameter_values['OUTFILENAME'])
-    
-    def delete_input_file(self):
-        
-        if os.path.isfile(self.locate_input_file()) == True:
-            subprocess.call('rm ' + self.locate_input_file(), shell=True)
-            
-    def write_file(self, array, filename, add_size=False, time=None):
+        self.base_names = []
 
-        with open(os.path.join(self.base_directory, filename), 'w') as file:
-            
-            if time is not None:
-                file.write(' ' + str(time) + '\n')
-            if add_size == True:
-                file.write(str(array.shape[0]) + '\n')
-            if len(array.shape) == 1:
-                for i in range(array.shape[0]):
-                    file.write(str(array[i]) + '\n')
-            else:
-                for i in range(array.shape[0]):
-                    file.write(str(array[i, 0]))
-                    for j in range(1, array.shape[1]):
-                        file.write(' ' + str(array[i, j]))
-                    file.write('\n')
+        for r in range(self.nb_realizations):
 
-    def write_points(self, array, filename, add_size=True):
-
-        with open(os.path.join(self.base_directory, filename + '.points'), 'w') as file:
-            
-            if add_size == True:
-                file.write(str(array.shape[0]) + '\n')
-            for i in range(array.shape[0]):
-                for j in range(array.shape[1] - 1):
-                    file.write(str(array[i, j]) + ' ')
-                file.write(str(int(array[i, -1])) + '\n')
-                    
-    def write_uplift_map(self, uplift_map, file_name='upliftmap', file_nb=1):
-        
-        padding = ''
-        if file_nb < 10:
-            padding = '00'
-        elif file_nb < 100:
-            padding = '0'
-
-        self.write_file(uplift_map, file_name + padding + str(file_nb))
-        
-    def write_uplift_maps(self, uplift_maps,
-                          uplift_times,
-                          file_name='upliftmap'):
-        
-        for i, uplift_map in enumerate(uplift_maps):
-            self.write_uplift_map(uplift_map,
-                                  file_name=file_name,
-                                  file_nb=i + 1)
-            
-        with open(os.path.join(self.base_directory,
-                               filename + 'times'), 'w') as file:
-            for time in uplift_times:
-                file.write(str(time) + '\n')
+            with open(self.locate_input_file(r), 'w') as input_file:
                 
-    def linear_time_series(self, nb_steps, rates, initial_value, seed=None):
+                self.write_header(input_file,
+                                  self.parameter_values[r]['OUTFILENAME'],
+                                  self.DESCRIPTION,
+                                  line_size)
+                for parameter in self.parameter_values[r]:
+                    description_key = parameter
+                    if description_key[-1].isdigit() == True and description_key[:-1] != 'TREEDIAM_B':
+                        description_key = description_key[:-1] + 'i'
+                    self.write_parameter(input_file,
+                                         description_key,
+                                         self.parameter_values[r][parameter],
+                                         parameter_name=parameter)
+                input_file.write('\n')
+                input_file.write('Comments here:\n')
+                input_file.write('\n')
+                if COMMENTS is not None:
+                    input_file.write(divide_line(COMMENTS, line_size))
 
-        run_time = self.parameter_values['RUNTIME']
+            self.base_names.append(self.parameter_values[r]['OUTFILENAME'])
 
-        if seed is not None:
-            np.random.seed(seed)
-
-        times = np.random.rand(nb_steps)
-        times /= np.sum(times)
-        times *= run_time
-        cum_times = np.cumsum(times)
-
-        new_value = initial_value
-        time_series = '@inline 0:' + str(new_value) + ' '
-        for time, cum_time, rate in zip(times, cum_times, rates):
-            new_value += rate*time
-            time_series += str(cum_time) + ':' + str(new_value) + ' '
-        time_series += 'interpolate'
+    def locate_input_file(self, realization=0):
         
-        return time_series
-
-    def write_grid_to_gslib(self,
-                            grid,
-                            cell_size,
-                            file_name,
-                            variable_names):
-
-        with open(os.path.join(self.base_directory,
-                               file_name + '.dat'), 'w') as file:
+        return os.path.join(self.base_directory,
+                            self.parameter_values[realization]['OUTFILENAME'] + '.in')
+    
+    def get_base_name(self, realization=0):
+        
+        return os.path.join(self.base_directory,
+                            self.parameter_values[realization]['OUTFILENAME'])
+    
+    def delete_input_file(self, realization=0):
+        
+        if os.path.isfile(self.locate_input_file(realization)) == True:
+            subprocess.call('rm ' + self.locate_input_file(realization), shell=True)
             
-            file.write(file_name + '\n')
-            file.write(str(grid.shape[0]))
-            for size in grid.shape[:0:-1]:
-                file.write(' ' + str(size))
-            for size in cell_size:
-                file.write(' ' + str(size/2))
-            for size in cell_size:
-                file.write(' ' + str(size))
-            file.write(' ' + str(1) + '\n')
-
-            grid = grid.reshape((grid.shape[0], -1)).T
-
-            for i in range(len(variable_names)):
-                file.write(variable_names[i] + '\n')
-            for i in range(grid.shape[0]):
-                for j in range(grid.shape[1] - 1):
-                    file.write(str(grid[i, j]) + ' ')
-                file.write(str(grid[i, -1]) + '\n')

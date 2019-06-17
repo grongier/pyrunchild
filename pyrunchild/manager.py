@@ -7,11 +7,10 @@ import re
 from glob import glob
 
 import numpy as np
-from scipy.interpolate import griddata
 # from numba import jit
 
 ################################################################################
-# Misc
+# Miscellaneous
 ################################################################################
 
 def sorted_alphanumeric(l):
@@ -29,14 +28,18 @@ def sorted_alphanumeric(l):
     return sorted(l, key=alphanum_key)
 
 ################################################################################
-# ChildReader
+# DataManager
 ################################################################################
 
-class ChildReader(object):
-
-    def __init__(self, base_directory, base_name):
+class DataManager(object):
+    
+    def __init__(self,
+                 base_directory,
+                 base_name):
 
         self.base_directory = base_directory
+        os.makedirs(self.base_directory, exist_ok=True)
+
         self.base_name = os.path.join(self.base_directory, base_name)
 
     def read_nodes(self,
@@ -380,3 +383,84 @@ class ChildReader(object):
                                                            basement_layers)
 
         return lithology
+        
+    def write_file(self, array, filename, add_size=False, time=None):
+
+        with open(os.path.join(self.base_directory, filename), 'w') as file:
+            
+            if time is not None:
+                file.write(' ' + str(time) + '\n')
+            if add_size == True:
+                file.write(str(array.shape[0]) + '\n')
+            if len(array.shape) == 1:
+                for i in range(array.shape[0]):
+                    file.write(str(array[i]) + '\n')
+            else:
+                for i in range(array.shape[0]):
+                    file.write(str(array[i, 0]))
+                    for j in range(1, array.shape[1]):
+                        file.write(' ' + str(array[i, j]))
+                    file.write('\n')
+
+    def write_points(self, array, filename, add_size=True):
+
+        with open(os.path.join(self.base_directory, filename + '.points'), 'w') as file:
+            
+            if add_size == True:
+                file.write(str(array.shape[0]) + '\n')
+            for i in range(array.shape[0]):
+                for j in range(array.shape[1] - 1):
+                    file.write(str(array[i, j]) + ' ')
+                file.write(str(int(array[i, -1])) + '\n')
+                    
+    def write_uplift_map(self, uplift_map, file_name='upliftmap', file_nb=1):
+        
+        padding = ''
+        if file_nb < 10:
+            padding = '00'
+        elif file_nb < 100:
+            padding = '0'
+
+        self.write_file(uplift_map, file_name + padding + str(file_nb))
+        
+    def write_uplift_maps(self, uplift_maps,
+                          uplift_times,
+                          file_name='upliftmap'):
+        
+        for i, uplift_map in enumerate(uplift_maps):
+            self.write_uplift_map(uplift_map,
+                                  file_name=file_name,
+                                  file_nb=i + 1)
+            
+        with open(os.path.join(self.base_directory,
+                               filename + 'times'), 'w') as file:
+            for time in uplift_times:
+                file.write(str(time) + '\n')
+
+    def write_grid_to_gslib(self,
+                            grid,
+                            cell_size,
+                            file_name,
+                            variable_names):
+
+        with open(os.path.join(self.base_directory,
+                               file_name + '.dat'), 'w') as file:
+            
+            file.write(file_name + '\n')
+            file.write(str(grid.shape[0]))
+            for size in grid.shape[:0:-1]:
+                file.write(' ' + str(size))
+            for size in cell_size:
+                file.write(' ' + str(size/2))
+            for size in cell_size:
+                file.write(' ' + str(size))
+            file.write(' ' + str(1) + '\n')
+
+            grid = grid.reshape((grid.shape[0], -1)).T
+
+            for i in range(len(variable_names)):
+                file.write(variable_names[i] + '\n')
+            for i in range(grid.shape[0]):
+                for j in range(grid.shape[1] - 1):
+                    file.write(str(grid[i, j]) + ' ')
+                file.write(str(grid[i, -1]) + '\n')
