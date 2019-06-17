@@ -9,7 +9,7 @@ import numpy as np
 from scipy import stats
 
 from pyrunchild.manager import DataManager
-from pyrunchild.time_series import RangeModel, MixtureModel, MemoryModel, LinearTimeSeries, FloodplainTimeSeries
+from pyrunchild.utils import RangeModel, MixtureModel, MemoryModel, LinearTimeSeries, FloodplainTimeSeries
 
 ################################################################################
 # Miscellaneous

@@ -8,7 +8,6 @@ import sys
 from functools import partial
 from contextlib import ExitStack
 import multiprocessing as mp
-# from multiprocessing import Pool
 from threading import Timer
 import numpy as np
 
