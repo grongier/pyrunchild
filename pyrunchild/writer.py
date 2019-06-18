@@ -1218,7 +1218,7 @@ class InputWriter(DataManager):
         elif isinstance(value, LinearTimeSeries) == True:
             self.parameter_values[realization][parameter] = value.write()
         elif isinstance(value, FloodplainTimeSeries) == True:
-            self.parameter_values[realization][parameter] = value.write(parameter_name,
+            self.parameter_values[realization][parameter] = value.write(parameter,
                                                                         base_name=self.parameter_values[realization]['OUTFILENAME'])
         else:
             self.parameter_values[realization][parameter] = value

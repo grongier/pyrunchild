@@ -81,7 +81,7 @@ class Child(InputWriter):
             print_log=False,
             write_log=False,
             timeout=1e8,
-            nb_attempts=1):
+            max_attempts=1):
         
         if input_name is None:
             if self.base_names is None:
@@ -94,7 +94,7 @@ class Child(InputWriter):
 
         return_code = None
         attempt = 0
-        while return_code != 0 and attempt < nb_attempts:
+        while return_code != 0 and attempt < max_attempts:
 
             with ExitStack() as stack:
 
@@ -139,7 +139,7 @@ class Child(InputWriter):
                   print_log=False,
                   write_log=False,
                   timeout=1e8,
-                  nb_attempts=1):
+                  max_attempts=1):
 
         if n_jobs == -1:
             try:
@@ -156,21 +156,17 @@ class Child(InputWriter):
                              print_log=print_log,
                              write_log=write_log,
                              timeout=timeout,
-                             nb_attempts=nb_attempts),
+                             max_attempts=max_attempts),
                      range(self.nb_realizations))
 
-    def sub_run(self, nb_realizations, timeout=1e8):
+    def sub_run(self, timeout=1e8):
 
-        base_name = self.writer.parameter_values['OUTFILENAME']
+        if self.base_names is None:
+            self.write_input_file()
+
         processes = []
-        for i in range(nb_realizations):
-            if self.seed is not None:
-                np.random.seed(self.seed + i)
-                self.writer.parameter_values['SEED'] = self.seed + i
-            self.writer.parameter_values['OUTFILENAME'] = base_name + '_' + str(i + 1)
-            self.writer.write_input_file()
-
-            input_name = base_name + '_' + str(i + 1) + '.in'
+        for r in range(self.nb_realizations):
+            input_name = self.base_names[r] + '.in'
             processes.append(subprocess.Popen([self.child_executable, input_name],
                                               cwd=self.base_directory,
                                               stdout=subprocess.DEVNULL,

@@ -5,6 +5,7 @@
 import os
 import re
 from glob import glob
+import h5py
 
 import numpy as np
 # from numba import jit
@@ -43,7 +44,7 @@ class DataManager(object):
         self.base_name = os.path.join(self.base_directory, base_name)
 
     def read_nodes(self,
-                   realization_nb=None,
+                   realization=None,
                    read_boundary_flag=True,
                    read_edge_id=True):
 
@@ -51,8 +52,8 @@ class DataManager(object):
         nodes = []
 
         file_suffix = ''
-        if realization_nb is not None:
-            file_suffix = '_' + str(realization_nb)
+        if realization is not None:
+            file_suffix = '_' + str(realization)
         with open(self.base_name + file_suffix + '.nodes') as node_file, \
              open(self.base_name + file_suffix + '.z') as z_file:
 
@@ -93,15 +94,15 @@ class DataManager(object):
         return nodes, time_slices
         
     def read_triangles(self,
-                       realization_nb=None,
+                       realization=None,
                        return_array=True):
 
         time_slices = []
         triangles = []
 
         file_suffix = ''
-        if realization_nb is not None:
-            file_suffix = '_' + str(realization_nb)
+        if realization is not None:
+            file_suffix = '_' + str(realization)
         with open(self.base_name + file_suffix + '.tri') as file:
 
             line = file.readline()
@@ -127,7 +128,7 @@ class DataManager(object):
         
     def read_output_file(self,
                          file_type,
-                         realization_nb=None,
+                         realization=None,
                          return_array=False):
         
         if file_type[0] != '.':
@@ -137,8 +138,8 @@ class DataManager(object):
         output = []
 
         file_suffix = ''
-        if realization_nb is not None:
-            file_suffix = '_' + str(realization_nb)
+        if realization is not None:
+            file_suffix = '_' + str(realization)
         with open(self.base_name + file_suffix + file_type) as file:
 
             line = file.readline()
@@ -187,14 +188,14 @@ class DataManager(object):
         else:
             return output
 
-    def read_layers(self, file_nb, realization_nb=None, to_array=False):
+    def read_layers(self, file_nb, realization=None, to_array=False):
         
         layers = []
         max_nb_layers = 0
 
         file_suffix = ''
-        if realization_nb is not None:
-            file_suffix = '_' + str(realization_nb)
+        if realization is not None:
+            file_suffix = '_' + str(realization)
         with open(self.base_name + file_suffix + '.lay' + file_nb) as layer_file:
         
             layer_line = layer_file.readline()
@@ -248,11 +249,11 @@ class DataManager(object):
                 
         return layers
 
-    def read_channel_map(self, file_nb, realization_nb=None):
+    def read_channel_map(self, file_nb, realization=None):
 
         file_suffix = ''
-        if realization_nb is not None:
-            file_suffix = '_' + str(realization_nb)
+        if realization is not None:
+            file_suffix = '_' + str(realization)
         with open(self.base_name + file_suffix + '.channelmap' + file_nb) as map_file:
 
             map_line = map_file.readline()
@@ -276,11 +277,11 @@ class DataManager(object):
                 
         return channel_map
 
-    def read_lithology(self, file_nb, realization_nb=None):
+    def read_lithology(self, file_nb, realization=None):
 
         file_suffix = ''
-        if realization_nb is not None:
-            file_suffix = '_' + str(realization_nb)
+        if realization is not None:
+            file_suffix = '_' + str(realization)
         with open(self.base_name + file_suffix + '.litho' + file_nb) as file:
 
             line = file.readline()
@@ -355,7 +356,7 @@ class DataManager(object):
                              z_step,
                              basement_layers=-1,
                              file_nb=None,
-                             realization_nb=None):
+                             realization=None):
 
         if file_nb is None:
             lithology_files = glob(self.base_name + '*.litho*')
@@ -366,9 +367,9 @@ class DataManager(object):
                 return None
 
         channel_map = self.read_channel_map(file_nb,
-                                            realization_nb=realization_nb)
+                                            realization=realization)
         lithology = self.read_lithology(file_nb,
-                                        realization_nb=realization_nb)
+                                        realization=realization)
 
         x = channel_map[0, 0]
         y = channel_map[1, :, 0]
@@ -376,7 +377,7 @@ class DataManager(object):
         grid = np.array(np.meshgrid(z, y, x, indexing='ij'))
         data = np.zeros((5,) + grid.shape[1:])
 
-        lithology = ChildReader.interpolate_lithology_grid(grid,
+        lithology = DataManager.interpolate_lithology_grid(grid,
                                                            data,
                                                            channel_map,
                                                            lithology,
@@ -464,3 +465,21 @@ class DataManager(object):
                 for j in range(grid.shape[1] - 1):
                     file.write(str(grid[i, j]) + ' ')
                 file.write(str(grid[i, -1]) + '\n')
+
+    def write_grid_to_pflotran(self,
+                               grid,
+                               file_name,
+                               variable_names):
+        
+        with h5py.File(os.path.join(self.base_directory,
+                                    file_name + '.h5'), mode='w') as h5file:
+            dataset_name = 'Cell Ids'
+            indices_array = np.zeros(np.prod(grid.shape[2:], dtype='int'), dtype='int')
+            for i in range(indices_array.shape[0]):
+                indices_array[i] = i + 1
+            h5dset = h5file.create_dataset(dataset_name, data=indices_array)
+            
+            for r in range(grid.shape[0]):
+                for v in range(grid.shape[1]):
+                    h5dset = h5file.create_dataset(variable_names[v] + str(r),
+                                                   data=grid[r, v].ravel())
