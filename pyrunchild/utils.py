@@ -3,8 +3,47 @@
 ################################################################################
 
 import os
+import re
+from glob import glob
+import textwrap
 import numpy as np
 from scipy import stats
+
+################################################################################
+# Miscellaneous
+################################################################################
+
+def divide_line(string,
+                line_size,
+                start_str='#   ',
+                join_str='\n#   ',
+                end_str='\n'):
+        
+    return start_str + join_str.join(textwrap.wrap(string, line_size)) + end_str
+
+def rename_old_file(file_path):
+
+    if os.path.isfile(file_path) == True:
+        new_file_path = file_path + '_old'
+        old_file_paths = glob(new_file_path + '*')
+        new_file_path += str(len(old_file_paths))
+
+        os.rename(file_path, new_file_path)
+
+
+def sorted_alphanumeric(l):
+    '''
+    Sort a list of strings with numbers
+    @param l: The list
+    @return The sorted list
+    '''
+    def convert(text):
+        return int(text) if text.isdigit() else text
+
+    def alphanum_key(key):
+        return [convert(c) for c in re.split('([0-9]+)', key)]
+
+    return sorted(l, key=alphanum_key)
 
 ################################################################################
 # MixtureModel
@@ -177,8 +216,7 @@ class FloodplainTimeSeries(object):
                  other_parameters=None,
                  output_path='.',
                  inline=False,
-                 set_out_intrvl=False,
-                 seed=None):
+                 set_out_intrvl=False):
 
         self.initial_time = initial_time
         self.time_steps = time_steps
@@ -190,8 +228,6 @@ class FloodplainTimeSeries(object):
         self.output_path = os.path.abspath(output_path)
         self.inline = inline
         self.set_out_intrvl = set_out_intrvl
-        if seed is not None:
-            np.random.seed(seed)
 
         self.parameter_values = dict()
         self.parameter_values['RUNTIME'] = None
@@ -213,13 +249,13 @@ class FloodplainTimeSeries(object):
             for key in other_parameters:
                 self.is_called[key] = None
 
-    def get_value(self, value):
+    def get_value(self, value, random_state=None):
 
         if isinstance(value, (stats._distn_infrastructure.rv_frozen, MixtureModel)) == True:
-            return value.rvs()
+            return value.rvs(random_state=random_state)
         return value
 
-    def build_varying_elevation(self, max_iter):
+    def build_varying_elevation(self, max_iter, random_state=None):
 
         self.times = [np.inf]
         iter_count = 0
@@ -229,9 +265,11 @@ class FloodplainTimeSeries(object):
             self.inlet_elevations = [self.initial_inlet_elevation]
             while self.inlet_elevations[-1] != self.final_inlet_elevation:
 
-                time_step = self.get_value(self.time_steps)
+                time_step = self.get_value(self.time_steps,
+                                           random_state=random_state)
                 new_time = self.times[-1] + time_step
-                inlet_elevation_rate = self.get_value(self.inlet_elevation_rate)
+                inlet_elevation_rate = self.get_value(self.inlet_elevation_rate,
+                                                      random_state=random_state)
                 new_inlet_elevation = self.inlet_elevations[-1] + inlet_elevation_rate*time_step
                 if new_inlet_elevation > self.final_inlet_elevation:
                     rate = (self.final_inlet_elevation
@@ -245,7 +283,7 @@ class FloodplainTimeSeries(object):
                 
             iter_count += 1
 
-    def build_time_series(self, base_name=None):
+    def build_time_series(self, base_name=None, save_previous_file=True):
 
         time_series = ''
         if self.inline == True:
@@ -257,7 +295,10 @@ class FloodplainTimeSeries(object):
             file_name = 'FP_INLET_ELEVATION.dat'
             if base_name is not None:
                 file_name = base_name + '_' + file_name
-            with open(os.path.join(self.output_path, file_name), 'w') as file:
+            file_path = os.path.join(self.output_path, file_name)
+            if save_previous_file == True:
+                rename_old_file(file_path)
+            with open(file_path, 'w') as file:
                 for time, elevation in zip(self.times, self.inlet_elevations):
                     file.write(str(time) + ' ' + str(elevation) + '\n')
             time_series = '@file ' + file_name + ' 1 2 interpolate'
@@ -270,7 +311,7 @@ class FloodplainTimeSeries(object):
         self.parameter_values['FP_INLET_ELEVATION'] = time_series
         self.is_called['FP_INLET_ELEVATION'] = False
         
-    def build_other_time_series(self):
+    def build_other_time_series(self, random_state=None, save_previous_file=True):
 
         if self.other_parameters is not None:
             for key in self.other_parameters:
@@ -279,16 +320,21 @@ class FloodplainTimeSeries(object):
                     if self.inline == True:
                         time_series = '@inline '
                         for time in self.times:
-                            parameter_value = self.get_value(self.other_parameters[key][0])
+                            parameter_value = self.get_value(self.other_parameters[key][0],
+                                                             random_state=random_state)
                             time_series += str(time) + ':' + str(parameter_value) + ' '
                         time_series += self.other_parameters[key][1]
                     else:
                         file_name = key + '.dat'
                         if base_name is not None:
                             file_name = base_name + '_' + file_name
-                        with open(os.path.join(self.output_path, file_name), 'w') as file:
+                        file_path = os.path.join(self.output_path, file_name)
+                        if save_previous_file == True:
+                            rename_old_file(file_path)
+                        with open(file_path, 'w') as file:
                             for time in self.times:
-                                parameter_value = self.get_value(self.other_parameters[key][0])
+                                parameter_value = self.get_value(self.other_parameters[key][0],
+                                                                 random_state=random_state)
                                 file.write(str(time) + ' ' + str(parameter_value) + '\n')
                         time_series = '@file ' + file_name + ' 1 2 interpolate'
 
@@ -297,12 +343,19 @@ class FloodplainTimeSeries(object):
                 else:
                     print(key, 'is not a time-varying parameter')
 
-    def write(self, parameter_name, base_name=None, max_iter=1e6):
+    def write(self,
+              parameter_name,
+              base_name=None,
+              save_previous_file=True,
+              max_iter=1e6,
+              random_state=None):
 
         if self.is_called['RUNTIME'] is None:
-            self.build_varying_elevation(max_iter)
-            self.build_time_series(base_name=base_name)
-            self.build_other_time_series()
+            self.build_varying_elevation(max_iter, random_state=random_state)
+            self.build_time_series(base_name=base_name,
+                                   save_previous_file=save_previous_file)
+            self.build_other_time_series(random_state=random_state,
+                                         save_previous_file=save_previous_file)
 
         self.is_called[parameter_name] = True
         if all(i == True for i in self.is_called.values()):

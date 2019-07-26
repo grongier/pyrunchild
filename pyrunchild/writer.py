@@ -3,25 +3,12 @@
 ################################################################################
 
 import os
-import textwrap
 from collections import OrderedDict
 import numpy as np
 from scipy import stats
 
 from pyrunchild.manager import DataManager
-from pyrunchild.utils import RangeModel, MixtureModel, MemoryModel, LinearTimeSeries, FloodplainTimeSeries
-
-################################################################################
-# Miscellaneous
-################################################################################
-
-def divide_line(string,
-                line_size,
-                start_str='#   ',
-                join_str='\n#   ',
-                end_str='\n'):
-        
-    return start_str + join_str.join(textwrap.wrap(string, line_size)) + end_str
+from pyrunchild.utils import divide_line, rename_old_file, RangeModel, MixtureModel, MemoryModel, LinearTimeSeries, FloodplainTimeSeries
 
 ################################################################################
 # InputWriter
@@ -33,6 +20,7 @@ class InputWriter(DataManager):
                  base_directory,
                  base_name,
                  nb_realizations=1,
+                 init_realization_nb=None,
                  preset_parameters=True,
                  seed=100):
 
@@ -40,6 +28,7 @@ class InputWriter(DataManager):
         self.out_file_name = base_name
         
         self.nb_realizations = nb_realizations
+        self.init_realization_nb = init_realization_nb
         self.parameters = OrderedDict()
         if preset_parameters == True:
             self.set_run_control()
@@ -66,12 +55,12 @@ class InputWriter(DataManager):
             self.set_forest()
             self.set_fire()
             self.set_various()
-        self.parameter_values = None
+        self.parameter_values = [OrderedDict() for r in range(self.nb_realizations)]
         self.parameter_descriptions = self.build_parameter_descriptions()
 
         self.seed = seed
 
-        self.base_names = None
+        self.base_names = [None for r in range(self.nb_realizations)]
         
     def build_parameter_descriptions(self):
         
@@ -1207,32 +1196,45 @@ class InputWriter(DataManager):
         self.parameters['OPT_FREEZE_ELEVATIONS'] = OPT_FREEZE_ELEVATIONS
         self.parameters['OPTSTREAMLINEBNDY'] = OPTSTREAMLINEBNDY
 
-    def solve_parameter(self, parameter, realization, value):
+    def solve_parameter(self,
+                        parameter,
+                        realization,
+                        value,
+                        save_previous_file=True,
+                        random_state=None):
         
         if parameter == 'OUTFILENAME':
-            if self.nb_realizations > 1:
-                value += '_' + str(realization + 1)
+            if self.init_realization_nb is not None:
+                value += '_' + str(self.init_realization_nb + realization)
             self.parameter_values[realization][parameter] = value
-        elif isinstance(value, (stats._distn_infrastructure.rv_frozen, RangeModel, MixtureModel, MemoryModel)) == True:
+        elif isinstance(value, RangeModel) == True:
             self.parameter_values[realization][parameter] = value.rvs()
-        elif isinstance(value, LinearTimeSeries) == True:
-            self.parameter_values[realization][parameter] = value.write()
+        elif isinstance(value, (stats._distn_infrastructure.rv_frozen, MixtureModel, MemoryModel)) == True:
+            self.parameter_values[realization][parameter] = value.rvs(random_state=random_state)
+        # elif isinstance(value, LinearTimeSeries) == True:
+        #     self.parameter_values[realization][parameter] = value.write()
         elif isinstance(value, FloodplainTimeSeries) == True:
             self.parameter_values[realization][parameter] = value.write(parameter,
-                                                                        base_name=self.parameter_values[realization]['OUTFILENAME'])
+                                                                        base_name=self.parameter_values[realization]['OUTFILENAME'],
+                                                                        save_previous_file=save_previous_file,
+                                                                        random_state=random_state)
         else:
             self.parameter_values[realization][parameter] = value
 
-    def solve_parameters(self):
+    def solve_parameters(self,
+                         realization,
+                         save_previous_file=True,
+                         random_state=None):
 
-        self.parameter_values = [OrderedDict() for r in range(self.nb_realizations)]
+        if random_state is None:
+            random_state = np.random.RandomState(self.seed + realization)
 
-        for r in range(self.nb_realizations):
-
-            np.random.seed(self.seed + r + 1)
-
-            for parameter in self.parameters:
-                self.solve_parameter(parameter, r, self.parameters[parameter])
+        for parameter in self.parameters:
+            self.solve_parameter(parameter,
+                                 realization,
+                                 self.parameters[parameter],
+                                 save_previous_file=save_previous_file,
+                                 random_state=random_state)
 
     def write_parameter(self, input_file, parameter, value, parameter_name=None):
         
@@ -1248,38 +1250,56 @@ class InputWriter(DataManager):
         input_file.write(divide_line(outfile_name + '.in: ' + description, line_size))
         input_file.write('#' + (line_size - 1)*'-' + '\n')
 
-    def write_input_file(self, COMMENTS=None):
+    def write_input_file(self,
+                         realization,
+                         COMMENTS=None,
+                         resolve_parameters=False,
+                         save_previous_file=True,
+                         random_state=None):
 
         line_size = 68
 
-        if self.parameter_values is None:
-            self.solve_parameters()
+        if not self.parameter_values[realization] or resolve_parameters == True:
+            self.solve_parameters(realization,
+                                  save_previous_file=save_previous_file,
+                                  random_state=random_state)
 
-        self.base_names = []
+        if save_previous_file == True:
+            rename_old_file(self.locate_input_file(realization))
+
+        with open(self.locate_input_file(realization), 'w') as input_file:
+            
+            self.write_header(input_file,
+                              self.parameter_values[realization]['OUTFILENAME'],
+                              self.DESCRIPTION,
+                              line_size)
+            for parameter in self.parameter_values[realization]:
+                description_key = parameter
+                if description_key[-1].isdigit() == True and description_key[:-1] != 'TREEDIAM_B':
+                    description_key = description_key[:-1] + 'i'
+                self.write_parameter(input_file,
+                                     description_key,
+                                     self.parameter_values[realization][parameter],
+                                     parameter_name=parameter)
+            input_file.write('\n')
+            input_file.write('Comments here:\n')
+            input_file.write('\n')
+            if COMMENTS is not None:
+                input_file.write(divide_line(COMMENTS, line_size))
+
+            self.base_names[realization] = self.parameter_values[realization]['OUTFILENAME']
+
+    def write_input_files(self,
+                          COMMENTS=None,
+                          resolve_parameters=False,
+                          random_state=None):
 
         for r in range(self.nb_realizations):
 
-            with open(self.locate_input_file(r), 'w') as input_file:
-                
-                self.write_header(input_file,
-                                  self.parameter_values[r]['OUTFILENAME'],
-                                  self.DESCRIPTION,
-                                  line_size)
-                for parameter in self.parameter_values[r]:
-                    description_key = parameter
-                    if description_key[-1].isdigit() == True and description_key[:-1] != 'TREEDIAM_B':
-                        description_key = description_key[:-1] + 'i'
-                    self.write_parameter(input_file,
-                                         description_key,
-                                         self.parameter_values[r][parameter],
-                                         parameter_name=parameter)
-                input_file.write('\n')
-                input_file.write('Comments here:\n')
-                input_file.write('\n')
-                if COMMENTS is not None:
-                    input_file.write(divide_line(COMMENTS, line_size))
-
-            self.base_names.append(self.parameter_values[r]['OUTFILENAME'])
+            self.write_input_file(r,
+                                  COMMENTS=COMMENTS,
+                                  resolve_parameters=resolve_parameters,
+                                  random_state=random_state)
 
     def locate_input_file(self, realization=0):
         
@@ -1295,4 +1315,34 @@ class InputWriter(DataManager):
         
         if os.path.isfile(self.locate_input_file(realization)) == True:
             subprocess.call('rm ' + self.locate_input_file(realization), shell=True)
+
+    def extract_input_file_parameters(self,
+                                      parameters,
+                                      realization=0,
+                                      input_file_path=None):
+        
+        if input_file_path is None:
+            input_file_path = self.base_name + '_' + str(realization) + '.in'
+            
+        parameter_values = dict()
+        found_parameters = [False]*len(parameters)
+
+        with open(input_file_path) as file:
+            
+            line = file.readline().strip('\n')
+            while False in found_parameters and line:
+                file_parameter = line.split(':')[0]
+                if file_parameter in parameters:
+                    line = file.readline().strip('\n')
+                    value = line.split(':')[0]
+                    try:
+                        value = float(value)
+                    finally:
+                        parameter_values[file_parameter] = value
+                    found_parameters[parameters.index(file_parameter)] = True
+                else:
+                    line = file.readline().strip('\n')
+                line = file.readline().strip('\n')
+                
+        return parameter_values
             

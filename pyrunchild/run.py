@@ -3,6 +3,7 @@
 ################################################################################
 
 import os
+import time
 import subprocess
 import sys
 from functools import partial
@@ -24,6 +25,7 @@ class Child(InputWriter):
                  base_name,
                  child_executable='child',
                  nb_realizations=1,
+                 init_realization_nb=0,
                  preset_parameters=True,
                  seed=100):
 
@@ -31,21 +33,22 @@ class Child(InputWriter):
                              base_directory,
                              base_name,
                              nb_realizations=nb_realizations,
+                             init_realization_nb=init_realization_nb,
                              preset_parameters=preset_parameters,
                              seed=seed)
 
         self.child_executable = os.path.expanduser(child_executable)
         
     def talkative_run(self,
-                      realization=1,
+                      realization=0,
                       input_name=None,
                       silent_mode=False,
                       write_log=False):
         
         if input_name is None:
-            if self.base_names is None:
-                self.write_input_file()
-            input_name = self.base_names[realization - 1]
+            if self.base_names[realization] is None:
+                self.write_input_file(realization)
+            input_name = self.base_names[realization]
 
         options = ''
         if silent_mode == True:
@@ -74,19 +77,52 @@ class Child(InputWriter):
             raise subprocess.CalledProcessError(process.returncode,
                                                 process.args)
 
+    def terminate_unchanged_file(self,
+                                 realization,
+                                 attempt,
+                                 max_attempts,
+                                 process,
+                                 file_name,
+                                 max_time):
+
+        if file_name is not None:
+
+            modif_time = os.path.getmtime(os.path.join(self.base_directory,
+                                                       file_name))
+            current_time = time.time()
+
+            if current_time - modif_time > max_time:
+                message = '| Realization ' + str(self.init_realization_nb + realization) + ' | Failed attempt ' + str(attempt + 1) + '/' + str(max_attempts) + ': File ' + file_name + ' has not been modified for the last ' + str(max_time) + 's'
+                print(message)
+                error_file_path = os.path.join(self.base_directory,
+                                               self.parameter_values[realization]['OUTFILENAME'] + '.err')
+                with open(error_file_path, 'a') as file:
+                    file.write(message + '\n')
+                process.terminate()
+
     def run(self,
-            realization=1,
+            realization=0,
             input_name=None,
             silent_mode=False,
             print_log=False,
             write_log=False,
-            timeout=1e8,
-            max_attempts=1):
-        
+            timeout=None,
+            file_timeout=None,
+            max_ellapsed_time=1e8,
+            file_type=None,
+            update_seed=True,
+            resolve_parameters=False,
+            max_attempts=1,
+            save_previous_input_file=True,
+            return_parameter_values=False):
+
+        random_state = np.random.RandomState(self.seed + realization)
         if input_name is None:
-            if self.base_names is None:
-                self.write_input_file()
-            input_name = self.base_names[realization - 1]
+            if self.base_names[realization] is None:
+                self.write_input_file(realization,
+                                      save_previous_file=save_previous_input_file,  
+                                      random_state=random_state)
+            input_name = self.base_names[realization]
 
         options = ''
         if silent_mode == True:
@@ -99,8 +135,14 @@ class Child(InputWriter):
             with ExitStack() as stack:
 
                 if attempt > 0:
-                    self.parameter_values[realization - 1]['SEED'] += self.nb_realizations
-                    self.write_input_file()
+                    if update_seed == True:
+                        self.parameter_values[realization]['SEED'] += self.nb_realizations
+                    if resolve_parameters == False:
+                        random_state.seed(self.seed + realization)
+                    self.write_input_file(realization,
+                                          resolve_parameters=resolve_parameters,
+                                          save_previous_file=save_previous_input_file,
+                                          random_state=random_state)
 
                 stdout = subprocess.DEVNULL
                 if print_log == True:
@@ -116,29 +158,65 @@ class Child(InputWriter):
                                                                stdout = stdout, 
                                                                stderr = subprocess.DEVNULL,
                                                                universal_newlines=True))
-                timer = Timer(timeout, process.terminate)
+                file_name = None
+                if file_type is not None:
+                    file_name = input_name + '.' + file_type
+                file_timer = Timer(file_timeout,
+                                   self.terminate_unchanged_file,
+                                   args=[realization,
+                                         attempt,
+                                         max_attempts,
+                                         process,
+                                         file_name,
+                                         max_ellapsed_time])
                 try:
-                    timer.start()
-                    stdout, _ = process.communicate()
+                    file_timer.start()
+                    stdout, _ = process.communicate(timeout=timeout)
+                except subprocess.TimeoutExpired:
+                    message = '| Realization ' + str(self.init_realization_nb + realization) + ' | Failed attempt ' + str(attempt + 1) + '/' + str(max_attempts) + ': Ran for too long'
+                    print(message)
+                    error_file_path = os.path.join(self.base_directory,
+                                                   self.parameter_values[realization]['OUTFILENAME'] + '.err')
+                    with open(error_file_path, 'a') as file:
+                        file.write(message + '\n')
+                    process.terminate()
                 finally:
-                    timer.cancel()
+                    file_timer.cancel()
 
                 return_code = process.returncode
+                if return_code is not None and return_code < 0:
+                    exception = subprocess.CalledProcessError(return_code, process.args)
+                    message = '| Realization ' + str(self.init_realization_nb + realization) + ' | Failed attempt ' + str(attempt + 1) + '/' + str(max_attempts) + ': ' + exception
+                    print(message)
+                    error_file_path = os.path.join(self.base_directory,
+                                                   self.parameter_values[realization]['OUTFILENAME'] + '.err')
+                    with open(error_file_path, 'a') as file:
+                        file.write(message + '\n')
                 attempt += 1
 
                 if print_log == True:
                     for line in stdout.split('\n'):
                         print(line)
             
-        if process.returncode != 0:
-            raise subprocess.CalledProcessError(process.returncode,
-                                                process.args)
+        # if process.returncode != 0:
+        #     raise subprocess.CalledProcessError(process.returncode,
+        #                                         process.args)
+
+        if return_parameter_values == True:
+            return self.base_names[realization], self.parameter_values[realization]
 
     def multi_run(self,
                   n_jobs=-1,
+                  chunksize=1,
                   print_log=False,
                   write_log=False,
-                  timeout=1e8,
+                  timeout=None,
+                  file_timeout=None,
+                  max_ellapsed_time=1e8,
+                  file_type='storm',
+                  update_seed=True,
+                  resolve_parameters=False,
+                  save_previous_input_file=True,
                   max_attempts=1):
 
         if n_jobs == -1:
@@ -149,20 +227,29 @@ class Child(InputWriter):
 
         with mp.Pool(processes=n_jobs) as pool:
 
-            if self.base_names is None:
-                self.write_input_file()
+            results = pool.map(partial(self.run,
+                                       print_log=print_log,
+                                       write_log=write_log,
+                                       timeout=timeout,
+                                       file_timeout=file_timeout,
+                                       max_ellapsed_time=max_ellapsed_time,
+                                       file_type=file_type,
+                                       update_seed=update_seed,
+                                       resolve_parameters=resolve_parameters,
+                                       max_attempts=max_attempts,
+                                       save_previous_input_file=save_previous_input_file,
+                                       return_parameter_values=True),
+                               range(self.nb_realizations),
+                               chunksize=chunksize)
 
-            pool.map(partial(self.run,
-                             print_log=print_log,
-                             write_log=write_log,
-                             timeout=timeout,
-                             max_attempts=max_attempts),
-                     range(self.nb_realizations))
+            self.base_names, self.parameter_values = zip(*results)
+            self.base_names = list(self.base_names)
+            self.parameter_values = list(self.parameter_values)
 
     def sub_run(self, timeout=1e8):
 
-        if self.base_names is None:
-            self.write_input_file()
+        if None in self.base_names:
+            self.write_input_files()
 
         processes = []
         for r in range(self.nb_realizations):
@@ -227,16 +314,17 @@ class Child(InputWriter):
         node_writer.set_fluvial_transport(OPTNOFLUVIAL=1)
         node_writer.set_hillslope_transport(OPTNODIFFUSION=1)
         node_writer.set_various(OPTTSOUTPUT=0)
-        node_writer.write_input_file()
+        node_writer.write_input_files()
         
-        input_name = os.path.join(self.base_directory, OUTFILENAME)
-        self.run(input_name=input_name)
+        self.run(input_name=OUTFILENAME)
         
         nodes, _ = node_writer.read_nodes()
 
         if delete_files == True:
-            subprocess.call('rm ' + self.base_directory + 'run.time', shell=True)
-            subprocess.call('rm ' + input_name + '*', shell=True)
+            subprocess.call('rm ' + os.path.join(self.base_directory, 'run.time'),
+                            shell=True)
+            subprocess.call('rm ' + os.path.join(self.base_directory, OUTFILENAME) + '*',
+                            shell=True)
         
         return nodes[0]
 
