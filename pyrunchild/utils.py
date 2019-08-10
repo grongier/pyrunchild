@@ -82,9 +82,12 @@ class MixtureModel(object):
         for i, submodel in enumerate(self.submodels):
             submodels_samples[:, i] = submodel.rvs(size=size,
                                                    random_state=random_state)
-        rand_indices = np.random.choice(np.arange(len(self.submodels)),
-                                        size=size,
-                                        p=self.weights)
+        choice = np.random.choice
+        if random_state is not None:
+            choice = random_state.choice
+        rand_indices = choice(np.arange(len(self.submodels)),
+                              size=size,
+                              p=self.weights)
         samples = submodels_samples[np.arange(size), rand_indices]
         
         if samples.shape[0] == 1:

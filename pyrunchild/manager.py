@@ -469,9 +469,12 @@ class DataManager(object):
     def write_grid_to_pflotran(self,
                                grid,
                                file_name,
-                               variable_names):
+                               variable_names,
+                               directory=None):
         
-        with h5py.File(os.path.join(self.base_directory,
+        if directory is None:
+            directory = self.base_directory
+        with h5py.File(os.path.join(directory,
                                     file_name + '.h5'), mode='w') as h5file:
             dataset_name = 'Cell Ids'
             indices_array = np.zeros(np.prod(grid.shape[2:], dtype='int'), dtype='int')
@@ -481,5 +484,5 @@ class DataManager(object):
             
             for r in range(grid.shape[0]):
                 for v in range(grid.shape[1]):
-                    h5dset = h5file.create_dataset(variable_names[v] + str(r),
+                    h5dset = h5file.create_dataset(variable_names[v] + str(r + 1),
                                                    data=grid[r, v].ravel())

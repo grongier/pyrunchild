@@ -92,7 +92,10 @@ class Child(InputWriter):
             current_time = time.time()
 
             if current_time - modif_time > max_time:
-                message = '| Realization ' + str(self.init_realization_nb + realization) + ' | Failed attempt ' + str(attempt + 1) + '/' + str(max_attempts) + ': File ' + file_name + ' has not been modified for the last ' + str(max_time) + 's'
+                init_realization_nb = 0
+                if self.init_realization_nb is not None:
+                    init_realization_nb = self.init_realization_nb
+                message = '| Realization ' + str(init_realization_nb + realization) + ' | Failed attempt ' + str(attempt + 1) + '/' + str(max_attempts) + ': File ' + file_name + ' has not been modified for the last ' + str(max_time) + 's'
                 print(message)
                 error_file_path = os.path.join(self.base_directory,
                                                self.parameter_values[realization]['OUTFILENAME'] + '.err')
@@ -173,7 +176,10 @@ class Child(InputWriter):
                     file_timer.start()
                     stdout, _ = process.communicate(timeout=timeout)
                 except subprocess.TimeoutExpired:
-                    message = '| Realization ' + str(self.init_realization_nb + realization) + ' | Failed attempt ' + str(attempt + 1) + '/' + str(max_attempts) + ': Ran for too long'
+                    init_realization_nb = 0
+                    if self.init_realization_nb is not None:
+                        init_realization_nb = self.init_realization_nb
+                    message = '| Realization ' + str(init_realization_nb + realization) + ' | Failed attempt ' + str(attempt + 1) + '/' + str(max_attempts) + ': Ran for too long'
                     print(message)
                     error_file_path = os.path.join(self.base_directory,
                                                    self.parameter_values[realization]['OUTFILENAME'] + '.err')
@@ -186,7 +192,10 @@ class Child(InputWriter):
                 return_code = process.returncode
                 if return_code is not None and return_code < 0:
                     exception = subprocess.CalledProcessError(return_code, process.args)
-                    message = '| Realization ' + str(self.init_realization_nb + realization) + ' | Failed attempt ' + str(attempt + 1) + '/' + str(max_attempts) + ': ' + exception
+                    init_realization_nb = 0
+                    if self.init_realization_nb is not None:
+                        init_realization_nb = self.init_realization_nb
+                    message = '| Realization ' + str(init_realization_nb + realization) + ' | Failed attempt ' + str(attempt + 1) + '/' + str(max_attempts) + ': ' + str(exception)
                     print(message)
                     error_file_path = os.path.join(self.base_directory,
                                                    self.parameter_values[realization]['OUTFILENAME'] + '.err')
