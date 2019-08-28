@@ -373,7 +373,7 @@ class DataManager(object):
 
         x = channel_map[0, 0]
         y = channel_map[1, :, 0]
-        z = np.arange(z_min, z_max, z_step)
+        z = np.arange(z_min + z_step/2, z_max - z_step/2, z_step)
         grid = np.array(np.meshgrid(z, y, x, indexing='ij'))
         data = np.zeros((5,) + grid.shape[1:])
 

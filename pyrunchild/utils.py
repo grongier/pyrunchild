@@ -6,6 +6,7 @@ import os
 import re
 from glob import glob
 import textwrap
+from threading import Timer
 import numpy as np
 from scipy import stats
 
@@ -20,6 +21,7 @@ def divide_line(string,
                 end_str='\n'):
         
     return start_str + join_str.join(textwrap.wrap(string, line_size)) + end_str
+
 
 def rename_old_file(file_path):
 
@@ -45,8 +47,28 @@ def sorted_alphanumeric(l):
 
     return sorted(l, key=alphanum_key)
 
+
+class ReturnTimer(Timer):
+
+    def __init__(self, interval, function, args=[], kwargs={}):
+
+        self._original_function = function
+        super(ReturnTimer, self).__init__(interval,
+                                          self._do_execute,
+                                          args,
+                                          kwargs)
+
+    def _do_execute(self, *a, **kw):
+
+        self.result = self._original_function(*a, **kw)
+
+    def join(self):
+        
+        super(ReturnTimer, self).join()
+        return self.result
+
 ################################################################################
-# MixtureModel
+# RangeModel
 ################################################################################
 
 class RangeModel(object):
@@ -64,6 +86,24 @@ class RangeModel(object):
         if samples.shape[0] == 1:
             return samples[0]
         return samples
+
+################################################################################
+# BinaryModel
+################################################################################
+
+class BinaryModel:
+    
+    def __init__(self, model):
+        
+        self.model = model
+
+    def rvs(self, size=1, random_state=None):
+                  
+        sample = self.model.rvs(size=size, random_state=random_state)
+
+        if size == 1:
+            return np.array((sample[0], 1 - sample[0]))
+        return np.array((sample, 1 - sample)).T
 
 ################################################################################
 # MixtureModel
@@ -314,7 +354,10 @@ class FloodplainTimeSeries(object):
         self.parameter_values['FP_INLET_ELEVATION'] = time_series
         self.is_called['FP_INLET_ELEVATION'] = False
         
-    def build_other_time_series(self, random_state=None, save_previous_file=True):
+    def build_other_time_series(self,
+                                random_state=None,
+                                base_name=None,
+                                save_previous_file=True):
 
         if self.other_parameters is not None:
             for key in self.other_parameters:
@@ -339,7 +382,8 @@ class FloodplainTimeSeries(object):
                                 parameter_value = self.get_value(self.other_parameters[key][0],
                                                                  random_state=random_state)
                                 file.write(str(time) + ' ' + str(parameter_value) + '\n')
-                        time_series = '@file ' + file_name + ' 1 2 interpolate'
+                        time_series = '@file ' + file_name + ' 1 2 '
+                        time_series += self.other_parameters[key][1]
 
                     self.parameter_values[key] = time_series
                     self.is_called[key] = False

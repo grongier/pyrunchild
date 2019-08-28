@@ -13,6 +13,7 @@ from threading import Timer
 import numpy as np
 
 from pyrunchild.writer import InputWriter
+from pyrunchild.utils import ReturnTimer
 
 ################################################################################
 # Child
@@ -78,11 +79,9 @@ class Child(InputWriter):
                                                 process.args)
 
     def terminate_unchanged_file(self,
-                                 realization,
-                                 attempt,
-                                 max_attempts,
                                  process,
                                  file_name,
+                                 runtime,
                                  max_time):
 
         if file_name is not None:
@@ -92,16 +91,8 @@ class Child(InputWriter):
             current_time = time.time()
 
             if current_time - modif_time > max_time:
-                init_realization_nb = 0
-                if self.init_realization_nb is not None:
-                    init_realization_nb = self.init_realization_nb
-                message = '| Realization ' + str(init_realization_nb + realization) + ' | Failed attempt ' + str(attempt + 1) + '/' + str(max_attempts) + ': File ' + file_name + ' has not been modified for the last ' + str(max_time) + 's'
-                print(message)
-                error_file_path = os.path.join(self.base_directory,
-                                               self.parameter_values[realization]['OUTFILENAME'] + '.err')
-                with open(error_file_path, 'a') as file:
-                    file.write(message + '\n')
                 process.terminate()
+                return 'Reason: File ' + file_name + ' has not been modified for the last ' + str(max_time) + 's at runtime ' + str(runtime) + 's\n'
 
     def run(self,
             realization=0,
@@ -137,6 +128,11 @@ class Child(InputWriter):
 
             with ExitStack() as stack:
 
+                init_realization_nb = 0
+                if self.init_realization_nb is not None:
+                    init_realization_nb = self.init_realization_nb
+                message = 'Realization ' + str(init_realization_nb + realization) + ': Failed attempt ' + str(attempt + 1) + '/' + str(max_attempts) + '\n'
+
                 if attempt > 0:
                     if update_seed == True:
                         self.parameter_values[realization]['SEED'] += self.nb_realizations
@@ -161,55 +157,77 @@ class Child(InputWriter):
                                                                stdout = stdout, 
                                                                stderr = subprocess.DEVNULL,
                                                                universal_newlines=True))
+                # file_name = None
+                # if file_type is not None:
+                #     file_name = input_name + '.' + file_type
+                # file_timer = ReturnTimer(file_timeout,
+                #                          self.terminate_unchanged_file,
+                #                          args=[process,
+                #                                file_name,
+                #                                file_timeout,
+                #                                max_ellapsed_time])
+                # try:
+                #     file_timer.start()
+                #     stdout, _ = process.communicate(timeout=timeout)
+                #     message += file_timer.join()
+                # except subprocess.TimeoutExpired:
+                #     process.terminate()
+                #     message += 'Reason: Ran for too long\n'
+                # finally:
+                #     file_timer.cancel()
+
                 file_name = None
                 if file_type is not None:
                     file_name = input_name + '.' + file_type
-                file_timer = Timer(file_timeout,
-                                   self.terminate_unchanged_file,
-                                   args=[realization,
-                                         attempt,
-                                         max_attempts,
-                                         process,
-                                         file_name,
-                                         max_ellapsed_time])
+                file_timers = []
+                runtime = file_timeout
+                while runtime is not None and runtime + file_timeout < timeout:
+                    file_timer = ReturnTimer(runtime,
+                                             self.terminate_unchanged_file,
+                                             args=[process,
+                                                   file_name,
+                                                   runtime,
+                                                   max_ellapsed_time])
+                    file_timers.append(file_timer)
+                    runtime += file_timeout
                 try:
-                    file_timer.start()
+                    for file_timer in file_timers:
+                        file_timer.start()
                     stdout, _ = process.communicate(timeout=timeout)
+                    error = None
+                    i = 0
+                    while error is None and i < len(file_timers):
+                        error = file_timers[i].join()
+                        if error is not None:
+                            message += error
+                        i += 1
                 except subprocess.TimeoutExpired:
-                    init_realization_nb = 0
-                    if self.init_realization_nb is not None:
-                        init_realization_nb = self.init_realization_nb
-                    message = '| Realization ' + str(init_realization_nb + realization) + ' | Failed attempt ' + str(attempt + 1) + '/' + str(max_attempts) + ': Ran for too long'
-                    print(message)
-                    error_file_path = os.path.join(self.base_directory,
-                                                   self.parameter_values[realization]['OUTFILENAME'] + '.err')
-                    with open(error_file_path, 'a') as file:
-                        file.write(message + '\n')
                     process.terminate()
+                    message += 'Reason: Ran for too long\n'
                 finally:
-                    file_timer.cancel()
+                    for file_timer in file_timers:
+                        file_timer.cancel()
 
                 return_code = process.returncode
-                if return_code is not None and return_code < 0:
-                    exception = subprocess.CalledProcessError(return_code, process.args)
-                    init_realization_nb = 0
-                    if self.init_realization_nb is not None:
-                        init_realization_nb = self.init_realization_nb
-                    message = '| Realization ' + str(init_realization_nb + realization) + ' | Failed attempt ' + str(attempt + 1) + '/' + str(max_attempts) + ': ' + str(exception)
-                    print(message)
+                if return_code != 0:
+                    if 'Reason' not in message:
+                        if return_code is not None:
+                            exception = subprocess.CalledProcessError(return_code, process.args)
+                            message += 'Reason: ' + str(exception) + '\n'
+                        else:
+                            message += 'Reason: Unknown\n'
+
+                    print(message, end='')
                     error_file_path = os.path.join(self.base_directory,
                                                    self.parameter_values[realization]['OUTFILENAME'] + '.err')
                     with open(error_file_path, 'a') as file:
-                        file.write(message + '\n')
-                attempt += 1
+                        file.write(message)
+
+                    attempt += 1
 
                 if print_log == True:
                     for line in stdout.split('\n'):
                         print(line)
-            
-        # if process.returncode != 0:
-        #     raise subprocess.CalledProcessError(process.returncode,
-        #                                         process.args)
 
         if return_parameter_values == True:
             return self.base_names[realization], self.parameter_values[realization]
