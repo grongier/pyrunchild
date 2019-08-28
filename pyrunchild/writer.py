@@ -8,7 +8,7 @@ import numpy as np
 from scipy import stats
 
 from pyrunchild.manager import DataManager
-from pyrunchild.utils import divide_line, rename_old_file, RangeModel, MixtureModel, MemoryModel, LinearTimeSeries, FloodplainTimeSeries
+from pyrunchild.utils import divide_line, rename_old_file, RangeModel, MixtureModel, MemoryModel, ConstrainedTimeSeries
 
 ################################################################################
 # InputWriter
@@ -1211,9 +1211,7 @@ class InputWriter(DataManager):
             self.parameter_values[realization][parameter] = value.rvs()
         elif isinstance(value, (stats._distn_infrastructure.rv_frozen, MixtureModel, MemoryModel)) == True:
             self.parameter_values[realization][parameter] = value.rvs(random_state=random_state)
-        # elif isinstance(value, LinearTimeSeries) == True:
-        #     self.parameter_values[realization][parameter] = value.write()
-        elif isinstance(value, FloodplainTimeSeries) == True:
+        elif isinstance(value, ConstrainedTimeSeries) == True:
             self.parameter_values[realization][parameter] = value.write(parameter,
                                                                         base_name=self.parameter_values[realization]['OUTFILENAME'],
                                                                         save_previous_file=save_previous_file,

@@ -157,24 +157,6 @@ class Child(InputWriter):
                                                                stdout = stdout, 
                                                                stderr = subprocess.DEVNULL,
                                                                universal_newlines=True))
-                # file_name = None
-                # if file_type is not None:
-                #     file_name = input_name + '.' + file_type
-                # file_timer = ReturnTimer(file_timeout,
-                #                          self.terminate_unchanged_file,
-                #                          args=[process,
-                #                                file_name,
-                #                                file_timeout,
-                #                                max_ellapsed_time])
-                # try:
-                #     file_timer.start()
-                #     stdout, _ = process.communicate(timeout=timeout)
-                #     message += file_timer.join()
-                # except subprocess.TimeoutExpired:
-                #     process.terminate()
-                #     message += 'Reason: Ran for too long\n'
-                # finally:
-                #     file_timer.cancel()
 
                 file_name = None
                 if file_type is not None:

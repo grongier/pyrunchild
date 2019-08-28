@@ -8,7 +8,7 @@ from glob import glob
 import textwrap
 from threading import Timer
 import numpy as np
-from scipy import stats
+from scipy import stats, linalg
 
 ################################################################################
 # Miscellaneous
@@ -165,132 +165,79 @@ class MemoryModel(object):
         return self.last_sample
 
 ################################################################################
-# Linear time series
+# Time series
 ################################################################################
 
-class LinearTimeSeries(object):
-
+class TimeSeriesConstraint:
+    
     def __init__(self,
-                 nb_steps,
-                 rates,
-                 initially_positive,
-                 initial_value,
+                 parameter,
                  initial_time,
-                 final_time,
-                 seed=None):
-
-        if seed is not None:
-            np.random.seed(seed)
-
-        self.nb_steps = nb_steps
-        self.rates = rates
-        self.initially_positive = initially_positive
-        self.initial_value = initial_value
-        self.initial_time = initial_time
-        self.final_time = final_time
-
-    def get_value(self, value):
-
-        if isinstance(value, stats._distn_infrastructure.rv_frozen) == True:
-            return value.rvs()
-        return value
-
-    def build_time_series(self,
-                          nb_steps,
-                          rates,
-                          initial_value,
-                          initial_time,
-                          final_time):
-
-        times = np.random.rand(nb_steps)
-        times /= np.sum(times)
-        times *= final_time - initial_time
-        times += initial_time
-        cum_times = np.cumsum(times)
-
-        new_value = initial_value
-        time_series = '@inline ' + str(initial_time) + ':' + str(new_value) + ' '
-        for time, cum_time, rate in zip(times, cum_times, rates):
-            new_value += rate*time
-            time_series += str(cum_time) + ':' + str(new_value) + ' '
-        time_series += 'interpolate'
-
-        return time_series
-
-    def write(self):
-
-        nb_steps = self.get_value(self.nb_steps)
-        initial_value = self.get_value(self.initial_value)
-        initial_time = self.get_value(self.initial_time)
-        final_time = self.get_value(self.final_time)
-
-        initially_positive = self.initially_positive
-        if isinstance(self.initially_positive, float) == True:
-            initially_positive = stats.bernoulli(self.initially_positive).rvs()
-        rates = self.rates
-        if isinstance(self.rates, stats._distn_infrastructure.rv_frozen) == True:
-            rates = [self.get_value(self.rates) for step in range(nb_steps)]
-        sign = 1
-        if initially_positive == False:
-            sign = -1
-        for i, rate in enumerate(rates):
-            rates[i] = sign*rate
-            sign *= -1
-
-        return self.build_time_series(nb_steps,
-                                      rates,
-                                      initial_value,
-                                      initial_time,
-                                      final_time)
-
-################################################################################
-# FloodplainTimeSeries
-################################################################################
-
-class FloodplainTimeSeries(object):
-
-    def __init__(self,
-                 initial_time,
-                 initial_inlet_elevation,
-                 final_inlet_elevation,
                  time_steps,
-                 inlet_elevation_rate,
+                 final_time=None,
+                 initial_value=None,
+                 rate=None,
+                 final_value=None,
+                 value=None,
+                 vmin=None,
+                 vmax=None,
+                 autocorr=None,
+                 mode='interpolate'):
+        
+        valid_parameters = ['ST_PMEAN', 'ST_STDUR', 'ST_ISTDUR',
+                            'UPRATE', 'FP_INLET_ELEVATION', 'FP_MU']
+        if parameter not in valid_parameters:
+            raise ValueError("Invalid time series parameter")
+        if (value is None
+            and (rate is None or initial_value is None or final_value is None)):
+            raise ValueError("Invalid parameters: either use value, or rate with an initial and final value")
+        if mode != 'interpolate' and mode != 'forward' and mode != '':
+            raise ValueError("Invalid mode, should be interpolate or forward")
+
+        self.parameter = parameter
+        self.initial_time = initial_time
+        self.time_steps = time_steps
+        self.final_time = final_time
+        self.rate = rate
+        self.initial_value = initial_value
+        self.final_value = final_value
+        self.value = value
+        self.autocorr = autocorr
+        self.mode = mode
+
+class ConstrainedTimeSeries:
+
+    def __init__(self,
+                 main_constraint,
+                 other_constraints=None,
                  max_run_time=np.inf,
-                 other_parameters=None,
                  output_path='.',
                  inline=False,
                  set_out_intrvl=False):
 
-        self.initial_time = initial_time
-        self.time_steps = time_steps
-        self.initial_inlet_elevation = initial_inlet_elevation
-        self.final_inlet_elevation = final_inlet_elevation
-        self.inlet_elevation_rate = inlet_elevation_rate
+        self.main_constraint = main_constraint
+        self.other_constraints = other_constraints
         self.max_run_time = max_run_time
-        self.other_parameters = other_parameters
         self.output_path = os.path.abspath(output_path)
         self.inline = inline
         self.set_out_intrvl = set_out_intrvl
 
-        self.parameter_values = dict()
-        self.parameter_values['RUNTIME'] = None
-        if self.set_out_intrvl == True:
-            self.parameter_values['OPINTRVL'] = None
-        self.parameter_values['ST_PMEAN'] = None
-        self.parameter_values['ST_STDUR'] = None
-        self.parameter_values['ST_ISTDUR'] = None
-        self.parameter_values['UPRATE'] = None
-        self.parameter_values['FP_INLET_ELEVATION'] = None
-        self.parameter_values['FP_MU'] = None
-
+        self.times = dict()
+        self.values = dict()
         self.is_called = dict()
         self.is_called['RUNTIME'] = None
         if self.set_out_intrvl == True:
             self.is_called['OPINTRVL'] = None
-        self.is_called['FP_INLET_ELEVATION'] = None
-        if other_parameters is not None:
-            for key in other_parameters:
-                self.is_called[key] = None
+        self.is_called[main_constraint.parameter] = None
+        if other_constraints is not None:
+            for constraint in other_constraints:
+                self.is_called[constraint.parameter] = None
+        self.mode = dict()
+        self.mode[main_constraint.parameter] = main_constraint.mode
+        if other_constraints is not None:
+            for constraint in other_constraints:
+                self.mode[constraint.parameter] = constraint.mode
+        self.parameter_values = dict()
 
     def get_value(self, value, random_state=None):
 
@@ -298,97 +245,152 @@ class FloodplainTimeSeries(object):
             return value.rvs(random_state=random_state)
         return value
 
-    def build_varying_elevation(self, max_iter, random_state=None):
+    def build_main_time_series(self, max_iter=1e6, random_state=None):
 
-        self.times = [np.inf]
-        iter_count = 0
-        while self.times[-1] >= self.max_run_time and iter_count < max_iter:
-
-            self.times = [self.initial_time]
-            self.inlet_elevations = [self.initial_inlet_elevation]
-            while self.inlet_elevations[-1] != self.final_inlet_elevation:
-
-                time_step = self.get_value(self.time_steps,
-                                           random_state=random_state)
-                new_time = self.times[-1] + time_step
-                inlet_elevation_rate = self.get_value(self.inlet_elevation_rate,
-                                                      random_state=random_state)
-                new_inlet_elevation = self.inlet_elevations[-1] + inlet_elevation_rate*time_step
-                if new_inlet_elevation > self.final_inlet_elevation:
-                    rate = (self.final_inlet_elevation
-                            - self.times[-1])/(new_inlet_elevation
-                                               - self.times[-1])
-                    new_time = np.round(self.times[-1] + rate*time_step)
-                    new_inlet_elevation = self.final_inlet_elevation
-
-                self.times.append(new_time)
-                self.inlet_elevations.append(new_inlet_elevation)
-                
-            iter_count += 1
-
-    def build_time_series(self, base_name=None, save_previous_file=True):
-
-        time_series = ''
-        if self.inline == True:
-            time_series = '@inline '
-            for time, elevation in zip(self.times, self.inlet_elevations):
-                time_series += str(time) + ':' + str(elevation) + ' '
-            time_series += 'interpolate'
-        else:
-            file_name = 'FP_INLET_ELEVATION.dat'
-            if base_name is not None:
-                file_name = base_name + '_' + file_name
-            file_path = os.path.join(self.output_path, file_name)
-            if save_previous_file == True:
-                rename_old_file(file_path)
-            with open(file_path, 'w') as file:
-                for time, elevation in zip(self.times, self.inlet_elevations):
-                    file.write(str(time) + ' ' + str(elevation) + '\n')
-            time_series = '@file ' + file_name + ' 1 2 interpolate'
-
-        self.parameter_values['RUNTIME'] = str(self.times[-1])
-        self.is_called['RUNTIME'] = False
-        if self.set_out_intrvl == True:
-            self.parameter_values['OPINTRVL'] = self.parameter_values['RUNTIME']
-            self.is_called['OPINTRVL'] = False
-        self.parameter_values['FP_INLET_ELEVATION'] = time_series
-        self.is_called['FP_INLET_ELEVATION'] = False
+        key = self.main_constraint.parameter
+        self.times[key] = [np.inf]
+        C = None
+        if self.main_constraint.autocorr is not None:
+            C = linalg.cholesky([[1., 0.], [self.main_constraint.autocorr, 1.]],
+                                lower=True)
         
-    def build_other_time_series(self,
-                                random_state=None,
-                                base_name=None,
-                                save_previous_file=True):
+        iter_count = 0
+        while self.times[key][-1] > self.max_run_time and iter_count < max_iter:
 
-        if self.other_parameters is not None:
-            for key in self.other_parameters:
-                if key in self.parameter_values:
-                    time_series = ''
-                    if self.inline == True:
-                        time_series = '@inline '
-                        for time in self.times:
-                            parameter_value = self.get_value(self.other_parameters[key][0],
-                                                             random_state=random_state)
-                            time_series += str(time) + ':' + str(parameter_value) + ' '
-                        time_series += self.other_parameters[key][1]
-                    else:
-                        file_name = key + '.dat'
-                        if base_name is not None:
-                            file_name = base_name + '_' + file_name
-                        file_path = os.path.join(self.output_path, file_name)
-                        if save_previous_file == True:
-                            rename_old_file(file_path)
-                        with open(file_path, 'w') as file:
-                            for time in self.times:
-                                parameter_value = self.get_value(self.other_parameters[key][0],
-                                                                 random_state=random_state)
-                                file.write(str(time) + ' ' + str(parameter_value) + '\n')
-                        time_series = '@file ' + file_name + ' 1 2 '
-                        time_series += self.other_parameters[key][1]
+            self.times[key] = [self.main_constraint.initial_time]
+            initial_value = self.main_constraint.initial_value
+            previous_value = None
+            if initial_value is None:
+                initial_value = self.get_value(self.main_constraint.value,
+                                               random_state=random_state)
+                previous_value = self.main_constraint.value.cdf(initial_value)
+                previous_value = stats.distributions.norm().ppf(previous_value)
+            self.values[key] = [initial_value]
+            while (self.values[key][-1] != self.main_constraint.final_value
+                   and self.times[key][-1] < self.max_run_time):
 
-                    self.parameter_values[key] = time_series
-                    self.is_called[key] = False
+                time_step = self.get_value(self.main_constraint.time_steps,
+                                           random_state=random_state)
+                new_time = self.times[key][-1] + time_step
+                
+                new_value = None
+                if self.main_constraint.rate is not None:
+                    rate = self.get_value(self.main_constraint.rate,
+                                          random_state=random_state)
+                    new_value = self.values[key][-1] + rate*time_step
+                    if new_value > self.main_constraint.final_value:
+                        rate = (self.main_constraint.final_value
+                                - self.times[key][-1])/(new_value
+                                                        - self.times[key][-1])
+                        new_time = np.round(self.times[key][-1] + rate*time_step)
+                        new_value = self.main_constraint.final_value
                 else:
-                    print(key, 'is not a time-varying parameter')
+                    if new_time > final_time:
+                        new_time = final_time
+                        new_value = self.values[key][-1]
+                    else:
+                        new_value = self.get_value(stats.distributions.norm().rvs(),
+                                                   random_state=random_state)
+                        if C is not None:
+                            new_value = np.dot(C, (previous_value, new_value))[1]
+                            previous_value = new_value
+                        new_value = stats.distributions.norm().cdf(new_value)
+                        new_value = self.main_constraint.value.ppf(new_value)
+
+                self.times[key].append(new_time)
+                self.values[key].append(new_value)
+
+            iter_count += 1
+            
+    def build_other_time_series(self, max_iter=1e6, random_state=None):
+        
+        final_time = self.times[self.main_constraint.parameter][-1]
+
+        for constraint in self.other_constraints:
+            key = constraint.parameter
+            self.times[key] = [np.inf]
+            C = None
+            if constraint.autocorr is not None:
+                C = linalg.cholesky([[1., 0.], [constraint.autocorr, 1.]],
+                                    lower=True)
+            
+            iter_count = 0
+            while self.times[key][-1] > final_time and iter_count < max_iter:
+
+                self.times[key] = [constraint.initial_time]
+                initial_value = constraint.initial_value
+                previous_value = None
+                if initial_value is None:
+                    initial_value = self.get_value(constraint.value,
+                                                   random_state=random_state)
+                    previous_value = constraint.value.cdf(initial_value)
+                    previous_value = stats.distributions.norm().ppf(previous_value)
+                self.values[key] = [initial_value]
+                while (self.values[key][-1] != constraint.final_value
+                       and self.times[key][-1] < final_time):
+
+                    time_step = self.get_value(constraint.time_steps,
+                                               random_state=random_state)
+                    new_time = self.times[key][-1] + time_step
+
+                    new_value = None
+                    if constraint.rate is not None:
+                        rate = self.get_value(constraint.rate,
+                                              random_state=random_state)
+                        new_value = self.values[key][-1] + rate*time_step
+                        if new_value > constraint.final_value:
+                            rate = (constraint.final_value
+                                    - self.times[key][-1])/(new_value
+                                                            - self.times[key][-1])
+                            new_time = np.round(self.times[key][-1] + rate*time_step)
+                            new_value = constraint.final_value
+                    else:
+                        if new_time > final_time:
+                            new_time = final_time
+                            new_value = self.values[key][-1]
+                        else:
+                            new_value = self.get_value(stats.distributions.norm().rvs(),
+                                                       random_state=random_state)
+                            if C is not None:
+                                new_value = np.dot(C, (previous_value, new_value))[1]
+                                previous_value = new_value
+                            new_value = stats.distributions.norm().cdf(new_value)
+                            new_value = constraint.value.ppf(new_value)
+
+                    self.times[key].append(new_time)
+                    self.values[key].append(new_value)
+
+                iter_count += 1
+
+    def write_time_series(self, base_name=None, save_previous_file=True):
+
+        for key in self.values:
+            time_series = ''
+            if self.inline == True:
+                time_series = '@inline '
+                for time, value in zip(self.times[key], self.values[key]):
+                    time_series += str(time) + ':' + str(value) + ' '
+                time_series += self.mode[key]
+            else:
+                file_name = key + '.dat'
+                if base_name is not None:
+                    file_name = base_name + '_' + file_name
+                file_path = os.path.join(self.output_path, file_name)
+                if save_previous_file == True:
+                    rename_old_file(file_path)
+                with open(file_path, 'w') as file:
+                    for time, value in zip(self.times[key], self.values[key]):
+                        file.write(str(time) + ' ' + str(value) + '\n')
+                time_series = '@file ' + file_name + ' 1 2 '
+                time_series += self.mode[key]
+
+            self.parameter_values['RUNTIME'] = str(self.times[key][-1])
+            self.is_called['RUNTIME'] = False
+            if self.set_out_intrvl == True:
+                self.parameter_values['OPINTRVL'] = self.parameter_values['RUNTIME']
+                self.is_called['OPINTRVL'] = False
+            self.parameter_values[key] = time_series
+            self.is_called[key] = False
 
     def write(self,
               parameter_name,
@@ -398,11 +400,12 @@ class FloodplainTimeSeries(object):
               random_state=None):
 
         if self.is_called['RUNTIME'] is None:
-            self.build_varying_elevation(max_iter, random_state=random_state)
-            self.build_time_series(base_name=base_name,
+            self.build_main_time_series(max_iter=max_iter,
+                                        random_state=random_state)
+            self.build_other_time_series(max_iter=max_iter,
+                                         random_state=random_state)
+            self.write_time_series(base_name=base_name,
                                    save_previous_file=save_previous_file)
-            self.build_other_time_series(random_state=random_state,
-                                         save_previous_file=save_previous_file)
 
         self.is_called[parameter_name] = True
         if all(i == True for i in self.is_called.values()):
