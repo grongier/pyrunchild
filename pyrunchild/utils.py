@@ -9,6 +9,9 @@ import textwrap
 from threading import Timer
 import numpy as np
 from scipy import stats, linalg
+from scipy.spatial import cKDTree
+import colorsys
+from matplotlib import colors
 
 ################################################################################
 # Miscellaneous
@@ -57,6 +60,7 @@ class ReturnTimer(Timer):
                                           self._do_execute,
                                           args,
                                           kwargs)
+        self.result = None
 
     def _do_execute(self, *a, **kw):
 
@@ -66,6 +70,34 @@ class ReturnTimer(Timer):
         
         super(ReturnTimer, self).join()
         return self.result
+
+################################################################################
+# Interpolation
+################################################################################
+
+def griddata_idw(points, values, xi, nb_neighbors=8, p=2):
+    """ Interpolate unstructured D-dimensional data using the inverse distance
+        weighted interpolation
+
+    @param points: ndarray of n data point coordinates, shape (n, D)
+    @param values: ndarray of n data point values from V variables, shape (n, V)
+    @param xi: ndarray of m data point coordinates, shape (m, D), at which to
+               interpolate
+    @param nb_neighbors: positive interger representing the number of neighbors
+                         to consider when interpolating each point
+    @param p: positive float representing the power parameter of the 
+              interpolation
+
+    @return a ndarray, shape (m, V), of interpolated values
+    """
+    tree = cKDTree(points)
+
+    distances, neighbors = tree.query(xi, k=nb_neighbors)
+    weights = np.zeros((1,) + distances.shape)
+    weights[0, :, 0] = 1
+    weights[0, distances[:, 0] != 0] = 1/distances[distances[:, 0] != 0]**p
+
+    return np.sum(weights*values[:, neighbors], axis=-1)/np.sum(weights, axis=-1)
 
 ################################################################################
 # RangeModel
@@ -245,17 +277,21 @@ class ConstrainedTimeSeries:
             return value.rvs(random_state=random_state)
         return value
 
-    def build_main_time_series(self, max_iter=1e6, random_state=None):
+    def build_main_time_series(self, max_iter=1e8, random_state=None):
 
         key = self.main_constraint.parameter
         self.times[key] = [np.inf]
+        self.values[key] = [np.nan]
         C = None
         if self.main_constraint.autocorr is not None:
             C = linalg.cholesky([[1., 0.], [self.main_constraint.autocorr, 1.]],
                                 lower=True)
         
         iter_count = 0
-        while self.times[key][-1] > self.max_run_time and iter_count < max_iter:
+        while (((self.main_constraint.rate is not None and 
+                 self.values[key][-1] != self.main_constraint.final_value)
+                or self.times[key][-1] > self.max_run_time)
+               and iter_count < max_iter):
 
             self.times[key] = [self.main_constraint.initial_time]
             initial_value = self.main_constraint.initial_value
@@ -289,7 +325,7 @@ class ConstrainedTimeSeries:
                         new_time = final_time
                         new_value = self.values[key][-1]
                     else:
-                        new_value = self.get_value(stats.distributions.norm().rvs(),
+                        new_value = self.get_value(stats.distributions.norm(),
                                                    random_state=random_state)
                         if C is not None:
                             new_value = np.dot(C, (previous_value, new_value))[1]
@@ -302,20 +338,24 @@ class ConstrainedTimeSeries:
 
             iter_count += 1
             
-    def build_other_time_series(self, max_iter=1e6, random_state=None):
+    def build_other_time_series(self, max_iter=1e8, random_state=None):
         
         final_time = self.times[self.main_constraint.parameter][-1]
 
         for constraint in self.other_constraints:
             key = constraint.parameter
             self.times[key] = [np.inf]
+            self.values[key] = [np.nan]
             C = None
             if constraint.autocorr is not None:
                 C = linalg.cholesky([[1., 0.], [constraint.autocorr, 1.]],
                                     lower=True)
             
             iter_count = 0
-            while self.times[key][-1] > final_time and iter_count < max_iter:
+            while (((constraint.rate is not None
+                     and self.values[key][-1] != constraint.final_value)
+                    or self.times[key][-1] > final_time)
+                   and iter_count < max_iter):
 
                 self.times[key] = [constraint.initial_time]
                 initial_value = constraint.initial_value
@@ -349,7 +389,7 @@ class ConstrainedTimeSeries:
                             new_time = final_time
                             new_value = self.values[key][-1]
                         else:
-                            new_value = self.get_value(stats.distributions.norm().rvs(),
+                            new_value = self.get_value(stats.distributions.norm(),
                                                        random_state=random_state)
                             if C is not None:
                                 new_value = np.dot(C, (previous_value, new_value))[1]
@@ -396,7 +436,7 @@ class ConstrainedTimeSeries:
               parameter_name,
               base_name=None,
               save_previous_file=True,
-              max_iter=1e6,
+              max_iter=1e8,
               random_state=None):
 
         if self.is_called['RUNTIME'] is None:
@@ -413,3 +453,36 @@ class ConstrainedTimeSeries:
                 self.is_called[key] = None
 
         return self.parameter_values[parameter_name]
+
+################################################################################
+# Colormaps
+################################################################################
+
+def _build_sand_cmap(light_fraction_1,
+                     light_fraction_2,
+                     light_fraction_3,
+                     light_fraction_4,
+                     use_gold_sand=False,
+                     name='sand'):
+    
+    mississippi_mud = (15/360, 0.29 + light_fraction_1*0.29, 0.14)
+    rio_grande_mud = (22/360, 0.48 + light_fraction_2*0.48, 0.33)
+    yuma_sand = (50/360, 0.89 + light_fraction_3*0.89, 0.78)
+    drifted_sand = (55/360, 0.94 + light_fraction_4*0.94, 0.40)
+    color_list = [colorsys.hls_to_rgb(*mississippi_mud) + (1,),
+                  colorsys.hls_to_rgb(*rio_grande_mud) + (1,),
+                  colorsys.hls_to_rgb(*yuma_sand) + (1,),
+                  colorsys.hls_to_rgb(*drifted_sand) + (1,)]
+    if use_gold_sand:
+        gold_sand = (46/360, 0.82 + light_fraction_3*0.82, 0.83)
+        color_list[2] = colorsys.hls_to_rgb(*gold_sand) + (1,)
+    
+    return colors.LinearSegmentedColormap.from_list(name, color_list)
+
+sand = _build_sand_cmap(-0.4, -0.18580533, -0.47128079, 0.,
+                        use_gold_sand=True,
+                        name='sand')
+
+sand_light = _build_sand_cmap(0.25, 0.0854333, -0.4679755, 0.,
+                              use_gold_sand=False,
+                              name='sand_light')

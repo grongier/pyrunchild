@@ -8,7 +8,10 @@ from glob import glob
 import h5py
 
 import numpy as np
+from scipy import interpolate
 # from numba import jit
+
+from pyrunchild.utils import griddata_idw
 
 ################################################################################
 # Miscellaneous
@@ -249,8 +252,15 @@ class DataManager(object):
                 
         return layers
 
-    def read_channel_map(self, file_nb, realization=None):
+    def read_channel_map(self, file_nb=None, realization=None):
 
+        if file_nb is None:
+            channel_map_files = glob(self.base_name + '*.channelmap*')
+            channel_map_files = sorted_alphanumeric(channel_map_files)
+            if len(channel_map_files) > 0:
+                file_nb = channel_map_files[-1].split('.')[-1][10:]
+            else:
+                return None
         file_suffix = ''
         if realization is not None:
             file_suffix = '_' + str(realization)
@@ -277,8 +287,15 @@ class DataManager(object):
                 
         return channel_map
 
-    def read_lithology(self, file_nb, realization=None):
+    def read_lithology(self, file_nb=None, realization=None):
 
+        if file_nb is None:
+            lithology_files = glob(self.base_name + '*.litho*')
+            lithology_files = sorted_alphanumeric(lithology_files)
+            if len(lithology_files) > 0:
+                file_nb = lithology_files[-1].split('.')[-1][5:]
+            else:
+                return None
         file_suffix = ''
         if realization is not None:
             file_suffix = '_' + str(realization)
@@ -314,11 +331,11 @@ class DataManager(object):
 
     @staticmethod    
     # @jit(nopython=True)
-    def interpolate_lithology_grid(grid,
-                                   data,
-                                   channel_map,
-                                   lithology,
-                                   basement_layers):
+    def _interpolate_lithology_columns(grid,
+                                       data,
+                                       channel_map,
+                                       lithology,
+                                       basement_layers):
 
         for j in range(grid.shape[2]):
             for i in range(grid.shape[3]):
@@ -350,21 +367,13 @@ class DataManager(object):
 
         return np.concatenate((grid, data))
 
-    def build_lithology_grid(self,
-                             z_min,
-                             z_max,
-                             z_step,
-                             basement_layers=-1,
-                             file_nb=None,
-                             realization=None):
-
-        if file_nb is None:
-            lithology_files = glob(self.base_name + '*.litho*')
-            lithology_files = sorted_alphanumeric(lithology_files)
-            if len(lithology_files) > 0:
-                file_nb = lithology_files[-1].split('.')[-1][5:]
-            else:
-                return None
+    def build_regular_lithology_grid_by_columns(self,
+                                                z_min,
+                                                z_max,
+                                                z_step,
+                                                basement_layers=-1,
+                                                file_nb=None,
+                                                realization=None):
 
         channel_map = self.read_channel_map(file_nb,
                                             realization=realization)
@@ -373,17 +382,144 @@ class DataManager(object):
 
         x = channel_map[0, 0]
         y = channel_map[1, :, 0]
-        z = np.arange(z_min + z_step/2, z_max - z_step/2, z_step)
+        z = np.arange(z_min + z_step/2, z_max, z_step)
         grid = np.array(np.meshgrid(z, y, x, indexing='ij'))
         data = np.zeros((5,) + grid.shape[1:])
 
-        lithology = DataManager.interpolate_lithology_grid(grid,
-                                                           data,
-                                                           channel_map,
-                                                           lithology,
-                                                           basement_layers)
+        lithology = DataManager._interpolate_lithology_columns(grid,
+                                                               data,
+                                                               channel_map,
+                                                               lithology,
+                                                               basement_layers)
 
         return lithology
+
+    def interpolate_channel_map_points(self, channel_map, kind='cubic'):
+        
+        spacing = (channel_map[0, 0, 1] - channel_map[0, 0, 0],
+                   channel_map[1, 1, 0] - channel_map[1, 0, 0])
+        extent = (channel_map[0, 0, 0] - spacing[0]/2,
+                  channel_map[0, 0, -1] + spacing[0]/2,
+                  channel_map[1, 0, 0] - spacing[1]/2,
+                  channel_map[1, -1, 0] + spacing[1]/2)
+        
+        channel_map_points = np.zeros((3,
+                                       channel_map.shape[1] + 1,
+                                       channel_map.shape[2] + 1))
+        x = np.linspace(extent[0], extent[1], channel_map.shape[2] + 1)
+        y = np.linspace(extent[2], extent[3], channel_map.shape[1] + 1)
+        channel_map_points[:2] = np.meshgrid(x, y)
+
+        f = interpolate.interp2d(channel_map[0, 0],
+                                 channel_map[1, :, 0],
+                                 channel_map[2],
+                                 kind=kind)
+        channel_map_points[2] = f(channel_map_points[0, 0],
+                                  channel_map_points[1, :, 0])
+        
+        return channel_map_points
+
+    def build_lithology_grid(self,
+                             basement_layers=2,
+                             return_cells=False,
+                             interpolation='linear',
+                             file_nb=None,
+                             realization=None):
+
+        channel_map = self.read_channel_map(file_nb,
+                                            realization=realization)
+        lithology = self.read_lithology(file_nb,
+                                        realization=realization)
+        nb_layers_max = max([len(i) for i in lithology]) - basement_layers
+        
+        channel_map_nodes = channel_map
+        nb_layers_max_nodes = nb_layers_max
+        key = 'cells'
+        if return_cells == False:
+            channel_map_nodes = self.interpolate_channel_map_points(channel_map,
+                                                                    kind=interpolation)
+            nb_layers_max_nodes += 1
+            key = 'points'
+            
+        lithology_nodes = np.empty((3, nb_layers_max_nodes) + channel_map_nodes.shape[1:])
+        lithology_nodes[:2] = channel_map_nodes[:2, np.newaxis]
+        lithology_nodes[2] = 0
+        lithology_cell_arrays = np.full((3, nb_layers_max) + channel_map.shape[1:],
+                                        np.nan)
+        
+        for i in range(nb_layers_max):
+            thickness_map = np.zeros(channel_map.shape[1:])
+            for v in range(thickness_map.shape[0]):
+                for u in range(thickness_map.shape[1]):
+                    n = v*thickness_map.shape[1] + u
+                    if -(i + 1) - basement_layers >= -lithology[n].shape[0]:
+                        thickness_map[v, u] = lithology[n][-(i + 1) - basement_layers, 0]
+                        lithology_cell_arrays[:, i, v, u] = lithology[n][-(i + 1) - basement_layers, 1:]
+            if return_cells == False:
+                f = interpolate.interp2d(channel_map[0, 0],
+                                         channel_map[1, :, 0],
+                                         thickness_map,
+                                         kind=interpolation)
+                lithology_nodes[2, i] = f(channel_map_nodes[0, 0],
+                                          channel_map_nodes[1, :, 0])
+            else:
+                lithology_nodes[2, i] = thickness_map
+
+        for i in range(nb_layers_max_nodes - 2, -1, -1):
+            lithology_nodes[2, i] += lithology_nodes[2, i + 1]
+        if return_cells == True:
+            lithology_nodes[2, :-1] = (lithology_nodes[2, 1:] + lithology_nodes[2, :-1])/2
+            lithology_nodes[2, -1] /= 2
+        lithology_nodes[2] = channel_map_nodes[2, np.newaxis] - lithology_nodes[2]
+        
+        return {key: lithology_nodes, 'cell_arrays': lithology_cell_arrays}
+
+    def build_regular_lithology_grid(self,
+                                     z_min,
+                                     z_max,
+                                     z_step,
+                                     basement_layers=2,
+                                     nb_neighbors=6,
+                                     p=4,
+                                     file_nb=None,
+                                     realization=None):
+        
+        lithology_cells = self.build_lithology_grid(basement_layers=basement_layers,
+                                                    return_cells=True,
+                                                    file_nb=file_nb,
+                                                    realization=realization)
+        
+        x = lithology_cells['cells'][0, 0, 0]
+        y = lithology_cells['cells'][1, 0, :, 0]
+        z = np.arange(z_min + z_step/2, z_max, z_step)
+        regular_cells = np.array(np.meshgrid(z, y, x, indexing='ij'))[::-1]
+        
+        regular_mask = np.zeros(regular_cells.shape[1:], dtype=np.bool)
+        channel_map = self.read_channel_map(file_nb)
+        regular_mask[regular_cells[2] <= channel_map[np.newaxis, 2]] = 1
+        
+        regular_cell_arrays = np.full(lithology_cells['cell_arrays'].shape[0:1] + regular_cells.shape[1:],
+                                      np.nan)
+        
+        regular_cell_arrays[:, regular_mask] = griddata_idw(lithology_cells['cells'][:, ~np.isnan(lithology_cells['cell_arrays'][0])].T,
+                                                            lithology_cells['cell_arrays'][:, ~np.isnan(lithology_cells['cell_arrays'][0])],
+                                                            regular_cells[:, regular_mask].T,
+                                                            nb_neighbors=nb_neighbors,
+                                                            p=p)
+
+        spacing = (regular_cells[0, 0, 0, 1] - regular_cells[0, 0, 0, 0],
+                   regular_cells[1, 0, 1, 0] - regular_cells[1, 0, 0, 0],
+                   z_step)
+        extent = ((regular_cells[0, 0, 0, 0] - spacing[0]/2,
+                   regular_cells[0, 0, 0, -1] + spacing[0]/2),
+                  (regular_cells[1, 0, 0, 0] - spacing[1]/2,
+                   regular_cells[1, 0, -1, 0] + spacing[1]/2),
+                  (z_min,
+                   z_max))
+        
+        return {'extent': np.array(extent),
+                'spacing': np.array(spacing),
+                'cell_arrays': regular_cell_arrays}
         
     def write_file(self, array, filename, add_size=False, time=None):
 

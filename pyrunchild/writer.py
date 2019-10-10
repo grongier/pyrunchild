@@ -1316,11 +1316,14 @@ class InputWriter(DataManager):
 
     def extract_input_file_parameters(self,
                                       parameters,
-                                      realization=0,
+                                      realization=None,
                                       input_file_path=None):
-        
+
+        file_suffix = ''
+        if realization is not None:
+            file_suffix = '_' + str(realization)    
         if input_file_path is None:
-            input_file_path = self.base_name + '_' + str(realization) + '.in'
+            input_file_path = self.base_name + file_suffix + '.in'
             
         parameter_values = dict()
         found_parameters = [False]*len(parameters)
