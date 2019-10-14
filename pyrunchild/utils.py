@@ -479,10 +479,15 @@ def _build_sand_cmap(light_fraction_1,
     
     return colors.LinearSegmentedColormap.from_list(name, color_list)
 
-sand = _build_sand_cmap(-0.4, -0.18580533, -0.47128079, 0.,
+sand = _build_sand_cmap(-0.4, -0.18580532707557418, -0.47128079235588854, 0.0,
                         use_gold_sand=True,
-                        name='sand')
+                        name="sand")
 
-sand_light = _build_sand_cmap(0.25, 0.0854333, -0.4679755, 0.,
+sand_light = _build_sand_cmap(0.25, 0.08543330133998818, -0.4679754966612923, 0.0,
                               use_gold_sand=False,
-                              name='sand_light')
+                              name="sand_light")
+
+sand_extra_light = _build_sand_cmap(0.6, 0.24604133456286564, -0.4370096077612467, 0.0,
+                                    use_gold_sand=False,
+                                    name="sand_extra_light")
+
