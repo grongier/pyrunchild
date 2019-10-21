@@ -375,9 +375,9 @@ class DataManager(object):
                                                 file_nb=None,
                                                 realization=None):
 
-        channel_map = self.read_channel_map(file_nb,
+        channel_map = self.read_channel_map(file_nb=file_nb,
                                             realization=realization)
-        lithology = self.read_lithology(file_nb,
+        lithology = self.read_lithology(file_nb=file_nb,
                                         realization=realization)
 
         x = channel_map[0, 0]
@@ -403,7 +403,7 @@ class DataManager(object):
                   channel_map[1, 0, 0] - spacing[1]/2,
                   channel_map[1, -1, 0] + spacing[1]/2)
         
-        channel_map_points = np.zeros((3,
+        channel_map_points = np.zeros((4,
                                        channel_map.shape[1] + 1,
                                        channel_map.shape[2] + 1))
         x = np.linspace(extent[0], extent[1], channel_map.shape[2] + 1)
@@ -416,6 +416,12 @@ class DataManager(object):
                                  kind=kind)
         channel_map_points[2] = f(channel_map_points[0, 0],
                                   channel_map_points[1, :, 0])
+        f = interpolate.interp2d(channel_map[0, 0],
+                                 channel_map[1, :, 0],
+                                 channel_map[3],
+                                 kind=kind)
+        channel_map_points[3] = f(channel_map_points[0, 0],
+                                  channel_map_points[1, :, 0])
         
         return channel_map_points
 
@@ -426,9 +432,9 @@ class DataManager(object):
                              file_nb=None,
                              realization=None):
 
-        channel_map = self.read_channel_map(file_nb,
+        channel_map = self.read_channel_map(file_nb=file_nb,
                                             realization=realization)
-        lithology = self.read_lithology(file_nb,
+        lithology = self.read_lithology(file_nb=file_nb,
                                         realization=realization)
         nb_layers_max = max([len(i) for i in lithology]) - basement_layers
         
@@ -444,7 +450,7 @@ class DataManager(object):
         lithology_nodes = np.empty((3, nb_layers_max_nodes) + channel_map_nodes.shape[1:])
         lithology_nodes[:2] = channel_map_nodes[:2, np.newaxis]
         lithology_nodes[2] = 0
-        lithology_cell_arrays = np.full((3, nb_layers_max) + channel_map.shape[1:],
+        lithology_cell_arrays = np.full((4, nb_layers_max) + channel_map.shape[1:],
                                         np.nan)
         
         for i in range(nb_layers_max):
@@ -454,7 +460,7 @@ class DataManager(object):
                     n = v*thickness_map.shape[1] + u
                     if -(i + 1) - basement_layers >= -lithology[n].shape[0]:
                         thickness_map[v, u] = lithology[n][-(i + 1) - basement_layers, 0]
-                        lithology_cell_arrays[:, i, v, u] = lithology[n][-(i + 1) - basement_layers, 1:]
+                        lithology_cell_arrays[:, i, v, u] = lithology[n][-(i + 1) - basement_layers]
             if return_cells == False:
                 f = interpolate.interp2d(channel_map[0, 0],
                                          channel_map[1, :, 0],
@@ -495,7 +501,8 @@ class DataManager(object):
         regular_cells = np.array(np.meshgrid(z, y, x, indexing='ij'))[::-1]
         
         regular_mask = np.zeros(regular_cells.shape[1:], dtype=np.bool)
-        channel_map = self.read_channel_map(file_nb)
+        channel_map = self.read_channel_map(file_nb=file_nb,
+                                            realization=realization)
         regular_mask[regular_cells[2] <= channel_map[np.newaxis, 2]] = 1
         
         regular_cell_arrays = np.full(lithology_cells['cell_arrays'].shape[0:1] + regular_cells.shape[1:],
