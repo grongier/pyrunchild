@@ -500,19 +500,18 @@ class DataManager(object):
         z = np.arange(z_min + z_step/2, z_max, z_step)
         regular_cells = np.array(np.meshgrid(z, y, x, indexing='ij'))[::-1]
         
-        regular_mask = np.zeros(regular_cells.shape[1:], dtype=np.bool)
-        channel_map = self.read_channel_map(file_nb=file_nb,
-                                            realization=realization)
-        regular_mask[regular_cells[2] <= channel_map[np.newaxis, 2]] = 1
-        
-        regular_cell_arrays = np.full(lithology_cells['cell_arrays'].shape[0:1] + regular_cells.shape[1:],
+        regular_cell_arrays = np.full((1 + lithology_cells['cell_arrays'].shape[0],) + regular_cells.shape[1:],
                                       np.nan)
+        regular_cell_arrays[0, regular_cells[2] > lithology_cells['cells'][2:3, -1]] = 0
+        regular_cell_arrays[0, (regular_cells[2] <= lithology_cells['cells'][2:3, -1])
+                               & (regular_cells[2] >= lithology_cells['cells'][2:3, 0])] = 1
+        regular_cell_arrays[0, regular_cells[2] < lithology_cells['cells'][2:3, 0]] = 2
         
-        regular_cell_arrays[:, regular_mask] = griddata_idw(lithology_cells['cells'][:, ~np.isnan(lithology_cells['cell_arrays'][0])].T,
-                                                            lithology_cells['cell_arrays'][:, ~np.isnan(lithology_cells['cell_arrays'][0])],
-                                                            regular_cells[:, regular_mask].T,
-                                                            nb_neighbors=nb_neighbors,
-                                                            p=p)
+        regular_cell_arrays[1:, regular_cell_arrays[0] == 1] = griddata_idw(lithology_cells['cells'][:, ~np.isnan(lithology_cells['cell_arrays'][0])].T,
+                                                                            lithology_cells['cell_arrays'][:, ~np.isnan(lithology_cells['cell_arrays'][0])],
+                                                                            regular_cells[:, regular_cell_arrays[0] == 1].T,
+                                                                            nb_neighbors=nb_neighbors,
+                                                                            p=p)
 
         spacing = (regular_cells[0, 0, 0, 1] - regular_cells[0, 0, 0, 0],
                    regular_cells[1, 0, 1, 0] - regular_cells[1, 0, 0, 0],

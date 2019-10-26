@@ -463,6 +463,7 @@ def _build_sand_cmap(light_fraction_1,
                      light_fraction_3,
                      light_fraction_4,
                      use_gold_sand=False,
+                     reverse=False,
                      name='sand'):
     
     mississippi_mud = (15/360, 0.29 + light_fraction_1*0.29, 0.14)
@@ -476,6 +477,8 @@ def _build_sand_cmap(light_fraction_1,
     if use_gold_sand:
         gold_sand = (46/360, 0.82 + light_fraction_3*0.82, 0.83)
         color_list[2] = colorsys.hls_to_rgb(*gold_sand) + (1,)
+    if reverse:
+        color_list = color_list[::-1]
     
     return colors.LinearSegmentedColormap.from_list(name, color_list)
 
