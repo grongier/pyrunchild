@@ -480,6 +480,39 @@ class DataManager(object):
         
         return {key: lithology_nodes, 'cell_arrays': lithology_cell_arrays}
 
+    def add_basement_layers(self,
+                            lithology,
+                            nb_layers,
+                            layer_thickness,
+                            nodes='cells'):
+
+        basement = np.empty(lithology[nodes].shape[0:1] + (nb_layers,) + lithology['cells'].shape[2:])
+        basement[0:2] = lithology[nodes][0:2, 0:1]
+        basement[2, nb_layers - 1] = lithology[nodes][2, 0] - 0.5
+        for i in range(nb_layers - 2, -1, -1):
+            basement[2, i] = basement[2, i + 1] - 0.5
+
+        basement_arrays = np.full(lithology['cell_arrays'].shape[0:1] + (nb_layers,) + lithology['cell_arrays'].shape[2:],
+                                  np.nan)
+        basement_arrays[0] = layer_thickness
+        
+        lithology[nodes] = np.concatenate((basement, lithology[nodes]), axis=1)
+        lithology['cell_arrays'] = np.concatenate((basement_arrays, lithology['cell_arrays']),
+                                                  axis=1)
+        
+        return lithology
+
+    def add_basement_variable(self, lithology, nb_basement_layers):
+        
+        basement = np.zeros((1,) + lithology['cell_arrays'].shape[1:])
+        basement[0, 0:nb_basement_layers] = 1
+        # basement[0, np.isnan(lithology['cell_arrays'][0])] = np.nan
+        
+        lithology['cell_arrays'] = np.concatenate((basement,
+                                                   lithology['cell_arrays']))
+        
+        return lithology
+
     def build_regular_lithology_grid(self,
                                      z_min,
                                      z_max,
@@ -494,6 +527,11 @@ class DataManager(object):
                                                     return_cells=True,
                                                     file_nb=file_nb,
                                                     realization=realization)
+        lithology_cells = self.add_basement_layers(lithology_cells,
+                                                   1,
+                                                   0.5,
+                                                   nodes='cells')
+        lithology_cells = self.add_basement_variable(lithology_cells, 1)
         
         x = lithology_cells['cells'][0, 0, 0]
         y = lithology_cells['cells'][1, 0, :, 0]
@@ -502,16 +540,25 @@ class DataManager(object):
         
         regular_cell_arrays = np.full((1 + lithology_cells['cell_arrays'].shape[0],) + regular_cells.shape[1:],
                                       np.nan)
+
         regular_cell_arrays[0, regular_cells[2] > lithology_cells['cells'][2:3, -1]] = 0
         regular_cell_arrays[0, (regular_cells[2] <= lithology_cells['cells'][2:3, -1])
                                & (regular_cells[2] >= lithology_cells['cells'][2:3, 0])] = 1
         regular_cell_arrays[0, regular_cells[2] < lithology_cells['cells'][2:3, 0]] = 2
         
-        regular_cell_arrays[1:, regular_cell_arrays[0] == 1] = griddata_idw(lithology_cells['cells'][:, ~np.isnan(lithology_cells['cell_arrays'][0])].T,
-                                                                            lithology_cells['cell_arrays'][:, ~np.isnan(lithology_cells['cell_arrays'][0])],
+        regular_cell_arrays[2:, regular_cell_arrays[0] == 1] = griddata_idw(lithology_cells['cells'][:, ~np.isnan(lithology_cells['cell_arrays'][2])].T,
+                                                                            lithology_cells['cell_arrays'][1:, ~np.isnan(lithology_cells['cell_arrays'][2])],
                                                                             regular_cells[:, regular_cell_arrays[0] == 1].T,
                                                                             nb_neighbors=nb_neighbors,
                                                                             p=p)
+
+        regular_cell_arrays[1, regular_cell_arrays[0] == 0] = 0
+        regular_cell_arrays[1, regular_cell_arrays[0] == 1] = griddata_idw(lithology_cells['cells'][:, ~np.isnan(lithology_cells['cell_arrays'][0])].T,
+                                                                           lithology_cells['cell_arrays'][0:1, ~np.isnan(lithology_cells['cell_arrays'][0])],
+                                                                           regular_cells[:, regular_cell_arrays[0] == 1].T,
+                                                                           nb_neighbors=nb_neighbors,
+                                                                           p=p)
+        regular_cell_arrays[1, regular_cell_arrays[0] == 2] = 1
 
         spacing = (regular_cells[0, 0, 0, 1] - regular_cells[0, 0, 0, 0],
                    regular_cells[1, 0, 1, 0] - regular_cells[1, 0, 0, 0],
