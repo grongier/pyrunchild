@@ -329,6 +329,24 @@ class DataManager(object):
                 
         return lithology
 
+    def extract_boundary_map(self,
+                             boundary=0,
+                             file_nb=None,
+                             realization=None):
+
+        boundary_map = self.read_channel_map(file_nb=file_nb,
+                                             realization=realization)[:3]
+        
+        lithology = self.read_lithology(file_nb=file_nb,
+                                        realization=realization)
+        for v in range(boundary_map.shape[1]):
+            for u in range(boundary_map.shape[2]):
+                n = v*boundary_map.shape[2] + u
+                for i in range(lithology[n].shape[0] - 1, boundary - 1, -1):
+                    boundary_map[2, v, u] -= lithology[n][-(i + 1), 0]
+
+        return boundary_map
+
     @staticmethod    
     # @jit(nopython=True)
     def _interpolate_lithology_columns(grid,
