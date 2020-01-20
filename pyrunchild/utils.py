@@ -123,19 +123,28 @@ class RangeModel(object):
 # BinaryModel
 ################################################################################
 
-class BinaryModel:
+class BinaryModel(object):
     
     def __init__(self, model):
         
         self.model = model
 
-    def rvs(self, size=1, random_state=None):
-                  
-        sample = self.model.rvs(size=size, random_state=random_state)
+        self.call_count = 0
+        self.last_sample = None
 
-        if size == 1:
-            return np.array((sample[0], 1 - sample[0]))
-        return np.array((sample, 1 - sample)).T
+    def rvs(self, size=1, random_state=None):
+        
+        if self.call_count == 0:           
+            self.last_sample = self.model.rvs(size=size,
+                                              random_state=random_state)
+            self.call_count += 1
+        else:
+            self.last_sample = 1 - self.last_sample
+            self.call_count -= 1
+            
+        if self.last_sample.shape[0] == 1:
+            return self.last_sample[0]
+        return self.last_sample
 
 ################################################################################
 # MixtureModel
@@ -197,6 +206,39 @@ class MemoryModel(object):
         return self.last_sample
 
 ################################################################################
+# DependencyModel
+################################################################################
+
+class DependencyModel(object):
+    
+    def __init__(self, model):
+        
+        self.model = model
+        self.args = model.args
+
+        self.call_count = 0
+        self.last_sample = None
+
+    def rvs(self, size=1, random_state=None):
+        
+        if self.call_count == 0:           
+            self.last_sample = self.model.rvs(size=size,
+                                              random_state=random_state)
+            self.call_count += 1
+        else:
+            for i in range(self.last_sample.shape[0]):
+                self.model.args = (self.args[0],
+                                   self.last_sample[i] - self.args[0])
+                self.last_sample[i] = self.model.rvs(size=1,
+                                                     random_state=random_state)
+            self.call_count -= 1
+            self.model.args = self.args
+            
+        if self.last_sample.shape[0] == 1:
+            return self.last_sample[0]
+        return self.last_sample
+
+################################################################################
 # Time series
 ################################################################################
 
@@ -220,9 +262,8 @@ class TimeSeriesConstraint:
                             'UPRATE', 'FP_INLET_ELEVATION', 'FP_MU']
         if parameter not in valid_parameters:
             raise ValueError("Invalid time series parameter")
-        if (value is None
-            and (rate is None or initial_value is None or final_value is None)):
-            raise ValueError("Invalid parameters: either use value, or rate with an initial and final value")
+        if (value is None and (rate is None or initial_value is None)):
+            raise ValueError("Invalid parameters: either use value, or rate with an initial value")
         if mode != 'interpolate' and mode != 'forward' and mode != '':
             raise ValueError("Invalid mode, should be interpolate or forward")
 
@@ -288,8 +329,8 @@ class ConstrainedTimeSeries:
                                 lower=True)
         
         iter_count = 0
-        while (((self.main_constraint.rate is not None and 
-                 self.values[key][-1] != self.main_constraint.final_value)
+        while (((self.values[key][-1] != self.main_constraint.final_value
+                 and self.times[key][-1] != self.main_constraint.final_time)
                 or self.times[key][-1] > self.max_run_time)
                and iter_count < max_iter):
 
@@ -303,6 +344,7 @@ class ConstrainedTimeSeries:
                 previous_value = stats.distributions.norm().ppf(previous_value)
             self.values[key] = [initial_value]
             while (self.values[key][-1] != self.main_constraint.final_value
+                   and self.times[key][-1] != self.main_constraint.final_time
                    and self.times[key][-1] < self.max_run_time):
 
                 time_step = self.get_value(self.main_constraint.time_steps,
@@ -313,16 +355,22 @@ class ConstrainedTimeSeries:
                 if self.main_constraint.rate is not None:
                     rate = self.get_value(self.main_constraint.rate,
                                           random_state=random_state)
-                    new_value = self.values[key][-1] + rate*time_step
-                    if new_value > self.main_constraint.final_value:
-                        rate = (self.main_constraint.final_value
-                                - self.times[key][-1])/(new_value
-                                                        - self.times[key][-1])
-                        new_time = np.round(self.times[key][-1] + rate*time_step)
-                        new_value = self.main_constraint.final_value
+                    if self.main_constraint.final_time is not None:
+                        if new_time > self.main_constraint.final_time:
+                            new_time = self.main_constraint.final_time
+                            time_step = new_time - self.times[key][-1]
+                        new_value = self.values[key][-1] + rate*time_step
+                    elif self.main_constraint.final_value is not None:
+                        new_value = self.values[key][-1] + rate*time_step
+                        if new_value > self.main_constraint.final_value:
+                            rate = (self.main_constraint.final_value
+                                    - self.times[key][-1])/(new_value
+                                                            - self.times[key][-1])
+                            new_time = np.round(self.times[key][-1] + rate*time_step)
+                            new_value = self.main_constraint.final_value
                 else:
-                    if new_time > final_time:
-                        new_time = final_time
+                    if new_time > self.main_constraint.final_time:
+                        new_time = self.main_constraint.final_time
                         new_value = self.values[key][-1]
                     else:
                         new_value = self.get_value(stats.distributions.norm(),
@@ -377,13 +425,26 @@ class ConstrainedTimeSeries:
                     if constraint.rate is not None:
                         rate = self.get_value(constraint.rate,
                                               random_state=random_state)
-                        new_value = self.values[key][-1] + rate*time_step
-                        if new_value > constraint.final_value:
-                            rate = (constraint.final_value
-                                    - self.times[key][-1])/(new_value
-                                                            - self.times[key][-1])
-                            new_time = np.round(self.times[key][-1] + rate*time_step)
-                            new_value = constraint.final_value
+                        if self.constraint.final_time is not None:
+                            if new_time > self.main_constraint.final_time:
+                                new_time = self.main_constraint.final_time
+                                time_step = new_time - self.times[key][-1]
+                            new_value = self.values[key][-1] + rate*time_step
+                        if constraint.rate is not None:
+                            rate = self.get_value(constraint.rate,
+                                                  random_state=random_state)
+                            new_value = self.values[key][-1] + rate*time_step
+                            if new_value > constraint.final_value:
+                                rate = (constraint.final_value
+                                        - self.times[key][-1])/(new_value
+                                                                - self.times[key][-1])
+                                new_time = np.round(self.times[key][-1] + rate*time_step)
+                                new_value = constraint.final_value
+                        else:
+                            if new_time > final_time:
+                                new_time = final_time
+                                time_step = new_time - self.times[key][-1]
+                            new_value = self.values[key][-1] + rate*time_step
                     else:
                         if new_time > final_time:
                             new_time = final_time

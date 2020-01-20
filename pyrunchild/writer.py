@@ -8,7 +8,7 @@ import numpy as np
 from scipy import stats
 
 from pyrunchild.manager import DataManager
-from pyrunchild.utils import divide_line, rename_old_file, RangeModel, MixtureModel, MemoryModel, ConstrainedTimeSeries
+from pyrunchild.utils import divide_line, rename_old_file, RangeModel, BinaryModel, MixtureModel, MemoryModel, DependencyModel, ConstrainedTimeSeries
 
 ################################################################################
 # InputWriter
@@ -1207,9 +1207,7 @@ class InputWriter(DataManager):
             if self.init_realization_nb is not None:
                 value += '_' + str(self.init_realization_nb + realization)
             self.parameter_values[realization][parameter] = value
-        elif isinstance(value, RangeModel) == True:
-            self.parameter_values[realization][parameter] = value.rvs()
-        elif isinstance(value, (stats._distn_infrastructure.rv_frozen, MixtureModel, MemoryModel)) == True:
+        elif isinstance(value, (stats._distn_infrastructure.rv_frozen, RangeModel, BinaryModel, MixtureModel, MemoryModel, DependencyModel)) == True:
             self.parameter_values[realization][parameter] = value.rvs(random_state=random_state)
         elif isinstance(value, ConstrainedTimeSeries) == True:
             self.parameter_values[realization][parameter] = value.write(parameter,
