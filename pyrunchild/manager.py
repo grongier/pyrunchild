@@ -464,7 +464,11 @@ class DataManager(object):
                             l += 1
                             k += 1
                     else:
-                        if z_points[k + 1] >= z_interface > z_points[k]:
+                        if z_points[k] > z_interface:
+                            # Sediments
+                            regular_cell_arrays[0, k, j, i] = 1
+                            regular_cell_arrays[1:, k, j, i] = lithology[n][l - 1]
+                        elif z_points[k + 1] >= z_interface > z_points[k]:
                             # Half-basement
                             regular_cell_arrays[0, k, j, i] = ratio*2 + (1 - ratio)
                             regular_cell_arrays[1:, k, j, i] = lithology[n][l - 1]
@@ -519,7 +523,7 @@ class DataManager(object):
                   channel_map[1, 0, 0] - spacing[1]/2,
                   channel_map[1, -1, 0] + spacing[1]/2)
         
-        channel_map_points = np.zeros((4,
+        channel_map_points = np.zeros((channel_map.shape[0],
                                        channel_map.shape[1] + 1,
                                        channel_map.shape[2] + 1))
         x = np.linspace(extent[0], extent[1], channel_map.shape[2] + 1)
@@ -532,12 +536,13 @@ class DataManager(object):
                                  kind=kind)
         channel_map_points[2] = f(channel_map_points[0, 0],
                                   channel_map_points[1, :, 0])
-        f = interpolate.interp2d(channel_map[0, 0],
-                                 channel_map[1, :, 0],
-                                 channel_map[3],
-                                 kind=kind)
-        channel_map_points[3] = f(channel_map_points[0, 0],
-                                  channel_map_points[1, :, 0])
+        if channel_map.shape[0] == 4:
+            f = interpolate.interp2d(channel_map[0, 0],
+                                     channel_map[1, :, 0],
+                                     channel_map[3],
+                                     kind=kind)
+            channel_map_points[3] = f(channel_map_points[0, 0],
+                                      channel_map_points[1, :, 0])
         
         return channel_map_points
 
