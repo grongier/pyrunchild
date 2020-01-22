@@ -211,12 +211,13 @@ class MemoryModel(object):
 
 class DependencyModel(object):
     
-    def __init__(self, model):
+    def __init__(self, model, call_memory=1):
         
         self.model = model
         self.args = model.args
 
         self.call_count = 0
+        self.call_memory = call_memory
         self.last_sample = None
 
     def rvs(self, size=1, random_state=None):
@@ -225,13 +226,15 @@ class DependencyModel(object):
             self.last_sample = self.model.rvs(size=size,
                                               random_state=random_state)
             self.call_count += 1
+        elif self.call_count < self.call_memory:
+            self.call_count += 1
         else:
             for i in range(self.last_sample.shape[0]):
                 self.model.args = (self.args[0],
                                    self.last_sample[i] - self.args[0])
                 self.last_sample[i] = self.model.rvs(size=1,
                                                      random_state=random_state)
-            self.call_count -= 1
+            self.call_count = 0
             self.model.args = self.args
             
         if self.last_sample.shape[0] == 1:
@@ -314,7 +317,7 @@ class ConstrainedTimeSeries:
 
     def get_value(self, value, random_state=None):
 
-        if isinstance(value, (stats._distn_infrastructure.rv_frozen, MixtureModel)) == True:
+        if isinstance(value, (stats._distn_infrastructure.rv_frozen, MixtureModel, MemoryModel, DependencyModel)) == True:
             return value.rvs(random_state=random_state)
         return value
 
@@ -335,13 +338,16 @@ class ConstrainedTimeSeries:
                and iter_count < max_iter):
 
             self.times[key] = [self.main_constraint.initial_time]
-            initial_value = self.main_constraint.initial_value
+            initial_value = None
             previous_value = None
-            if initial_value is None:
+            if self.main_constraint.initial_value is None:
                 initial_value = self.get_value(self.main_constraint.value,
                                                random_state=random_state)
                 previous_value = self.main_constraint.value.cdf(initial_value)
                 previous_value = stats.distributions.norm().ppf(previous_value)
+            else:
+                initial_value = self.get_value(self.main_constraint.initial_value,
+                                               random_state=random_state)
             self.values[key] = [initial_value]
             while (self.values[key][-1] != self.main_constraint.final_value
                    and self.times[key][-1] != self.main_constraint.final_time
@@ -369,17 +375,16 @@ class ConstrainedTimeSeries:
                             new_time = np.round(self.times[key][-1] + rate*time_step)
                             new_value = self.main_constraint.final_value
                 else:
+                    new_value = self.get_value(stats.distributions.norm(),
+                                               random_state=random_state)
+                    if C is not None:
+                        new_value = np.dot(C, (previous_value, new_value))[1]
+                        previous_value = new_value
+                    new_value = stats.distributions.norm().cdf(new_value)
+                    new_value = self.main_constraint.value.ppf(new_value)
                     if new_time > self.main_constraint.final_time:
+                        new_value = self.values[key][-1] + (new_value - self.values[key][-1])*(self.main_constraint.final_time - self.times[key][-1])/(new_time - self.times[key][-1])
                         new_time = self.main_constraint.final_time
-                        new_value = self.values[key][-1]
-                    else:
-                        new_value = self.get_value(stats.distributions.norm(),
-                                                   random_state=random_state)
-                        if C is not None:
-                            new_value = np.dot(C, (previous_value, new_value))[1]
-                            previous_value = new_value
-                        new_value = stats.distributions.norm().cdf(new_value)
-                        new_value = self.main_constraint.value.ppf(new_value)
 
                 self.times[key].append(new_time)
                 self.values[key].append(new_value)
@@ -400,22 +405,22 @@ class ConstrainedTimeSeries:
                                     lower=True)
             
             iter_count = 0
-            while (((constraint.rate is not None
-                     and self.values[key][-1] != constraint.final_value)
-                    or self.times[key][-1] > final_time)
+            while (((self.times[key][-1] != final_time))
                    and iter_count < max_iter):
 
                 self.times[key] = [constraint.initial_time]
-                initial_value = constraint.initial_value
+                initial_value = None
                 previous_value = None
-                if initial_value is None:
+                if constraint.initial_value is None:
                     initial_value = self.get_value(constraint.value,
                                                    random_state=random_state)
                     previous_value = constraint.value.cdf(initial_value)
                     previous_value = stats.distributions.norm().ppf(previous_value)
+                else:
+                    initial_value = self.get_value(constraint.initial_value,
+                                                   random_state=random_state)
                 self.values[key] = [initial_value]
-                while (self.values[key][-1] != constraint.final_value
-                       and self.times[key][-1] < final_time):
+                while self.times[key][-1] < final_time:
 
                     time_step = self.get_value(constraint.time_steps,
                                                random_state=random_state)
@@ -425,38 +430,21 @@ class ConstrainedTimeSeries:
                     if constraint.rate is not None:
                         rate = self.get_value(constraint.rate,
                                               random_state=random_state)
-                        if self.constraint.final_time is not None:
-                            if new_time > self.main_constraint.final_time:
-                                new_time = self.main_constraint.final_time
-                                time_step = new_time - self.times[key][-1]
-                            new_value = self.values[key][-1] + rate*time_step
-                        if constraint.rate is not None:
-                            rate = self.get_value(constraint.rate,
-                                                  random_state=random_state)
-                            new_value = self.values[key][-1] + rate*time_step
-                            if new_value > constraint.final_value:
-                                rate = (constraint.final_value
-                                        - self.times[key][-1])/(new_value
-                                                                - self.times[key][-1])
-                                new_time = np.round(self.times[key][-1] + rate*time_step)
-                                new_value = constraint.final_value
-                        else:
-                            if new_time > final_time:
-                                new_time = final_time
-                                time_step = new_time - self.times[key][-1]
-                            new_value = self.values[key][-1] + rate*time_step
-                    else:
                         if new_time > final_time:
                             new_time = final_time
-                            new_value = self.values[key][-1]
-                        else:
-                            new_value = self.get_value(stats.distributions.norm(),
-                                                       random_state=random_state)
-                            if C is not None:
-                                new_value = np.dot(C, (previous_value, new_value))[1]
-                                previous_value = new_value
-                            new_value = stats.distributions.norm().cdf(new_value)
-                            new_value = constraint.value.ppf(new_value)
+                            time_step = new_time - self.times[key][-1]
+                        new_value = self.values[key][-1] + rate*time_step
+                    else:
+                        new_value = self.get_value(stats.distributions.norm(),
+                                                   random_state=random_state)
+                        if C is not None:
+                            new_value = np.dot(C, (previous_value, new_value))[1]
+                            previous_value = new_value
+                        new_value = stats.distributions.norm().cdf(new_value)
+                        new_value = constraint.value.ppf(new_value)
+                        if new_time > final_time:
+                            new_value = self.values[key][-1] + (new_value - self.values[key][-1])*(final_time - self.times[key][-1])/(new_time - self.times[key][-1])
+                            new_time = final_time
 
                     self.times[key].append(new_time)
                     self.values[key].append(new_value)

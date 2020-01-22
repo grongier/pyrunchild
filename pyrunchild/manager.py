@@ -287,6 +287,46 @@ class DataManager(object):
                 
         return channel_map
 
+    def read_top_layer(self, height=None, width=None, file_nb=None, realization=None):
+
+        if file_nb is None:
+            top_files = glob(self.base_name + '*.top*')
+            top_files = sorted_alphanumeric(top_files)
+            if len(top_files) > 0:
+                file_nb = top_files[-1].split('.')[-1][3:]
+            else:
+                return None
+        file_suffix = ''
+        if realization is not None:
+            file_suffix = '_' + str(realization)
+        if height is None or width is None:
+            with open(self.base_name + file_suffix + '.channelmap' + file_nb) as map_file:
+                map_line = map_file.readline()
+                map_line = map_file.readline()
+                map_line = map_file.readline()
+                width = int(map_line.rstrip('\n')) - 1
+                map_line = map_file.readline()
+                height = int(map_line.rstrip('\n')) - 1
+                
+        with open(self.base_name + file_suffix + '.top' + file_nb) as top_file:
+
+            top_line = top_file.readline()
+            time_slice = float(top_line.rstrip('\n'))
+            top_line = top_file.readline()
+
+            top_layer = np.full((18, height, width), np.nan)
+
+            for i in range(width):
+                for j in range(height):
+
+                    top_line = top_file.readline()
+                    # x, y, z, mind, axisd, Ct1, Rt1, D1, DA1, DA2, DA3, DA4
+                    top_line = top_line.rstrip(' \n').split(' ')
+                    if len(top_line) == 18:
+                        top_layer[:, j, i] = [float(k) for k in top_line]
+
+        return top_layer
+
     def read_lithology(self, file_nb=None, realization=None):
 
         if file_nb is None:
@@ -713,6 +753,37 @@ class DataManager(object):
         return {'extent': np.array(extent),
                 'spacing': np.array(spacing),
                 'cell_arrays': regular_cell_arrays}
+
+    @staticmethod
+    def _read_preservation_potential(path):
+        
+        with open(path) as file:
+            lines = []
+            for line in file:
+                line = [float(i) for i in line.rstrip('\n').split(' ')]
+                lines.append(line)
+            preservation_potential = np.full((len(lines), len(lines[-1])), np.nan)
+            for i in range(len(lines)):
+                preservation_potential[i, :len(lines[i])] = lines[i]
+                
+        return preservation_potential
+
+    def read_preservation_potential(self, realization=None):
+        
+        preservation_potential = dict()
+
+        file_suffix = ''
+        if realization is not None:
+            file_suffix = '_' + str(realization)
+            
+        path = self.base_name + file_suffix + '.presSurface'
+        preservation_potential['surface'] = DataManager._read_preservation_potential(path)
+        path = self.base_name + file_suffix + '.presSubsurface'
+        preservation_potential['subsurface'] = DataManager._read_preservation_potential(path)
+        path = self.base_name + file_suffix + '.presSubsurface2'
+        preservation_potential['subsurface2'] = np.loadtxt(path, skiprows=2)
+
+        return preservation_potential
         
     def write_file(self, array, filename, add_size=False, time=None):
 
