@@ -504,6 +504,69 @@ class ConstrainedTimeSeries:
         return self.parameter_values[parameter_name]
 
 ################################################################################
+# TwoGrainsModel
+################################################################################
+
+class TwoGrainsModel:
+
+    def __init__(self,
+                 coarse_diameter,
+                 fine_diameter,
+                 coarse_proportion,
+                 is_inlet=True,
+                 is_meandering=True):
+
+        self.coarse_diameter = coarse_diameter
+        self.fine_diameter = fine_diameter
+        self.coarse_proportion = coarse_proportion
+        self.is_inlet = is_inlet
+        self.is_meandering = is_meandering
+
+        self.i_calls = 0
+        self.nb_calls = 6
+        if self.is_inlet == True:
+            self.nb_calls += 2
+        if self.is_meandering == True:
+            self.nb_calls += 1
+
+        self.parameter_values = dict()
+
+    def get_value(self, value, random_state=None):
+
+        if isinstance(value, (stats._distn_infrastructure.rv_frozen, MixtureModel, MemoryModel, DependencyModel)) == True:
+            return value.rvs(random_state=random_state)
+        return value
+
+    def draw_parameters(self, random_state=None):
+
+        self.parameter_values['GRAINDIAM1'] = self.get_value(self.coarse_diameter,
+                                                             random_state=random_state)
+        self.parameter_values['GRAINDIAM2'] = self.get_value(self.fine_diameter,
+                                                             random_state=random_state)
+        self.parameter_values['REGPROPORTION1'] = self.get_value(self.coarse_proportion,
+                                                                 random_state=random_state)
+        self.parameter_values['REGPROPORTION2'] = 1 - self.parameter_values['REGPROPORTION1']
+        self.parameter_values['BRPROPORTION1'] = self.parameter_values['REGPROPORTION1']
+        self.parameter_values['BRPROPORTION2'] = self.parameter_values['REGPROPORTION2']
+        if self.is_inlet == True:
+            self.parameter_values['INSEDLOAD1'] = self.parameter_values['REGPROPORTION1']
+            self.parameter_values['INSEDLOAD2'] = self.parameter_values['REGPROPORTION2']
+        if self.is_meandering == True:
+            self.parameter_values['MEDIAN_DIAMETER'] = self.parameter_values['GRAINDIAM1']*self.parameter_values['REGPROPORTION1'] \
+                                                       + self.parameter_values['GRAINDIAM2']*self.parameter_values['REGPROPORTION2']
+
+    def rvs(self, parameter_name, random_state=None):
+
+        if self.i_calls == 0:
+            self.draw_parameters(random_state=random_state)
+
+        self.i_calls += 1
+        if self.i_calls == self.nb_calls:
+            self.i_calls = 0
+
+        return self.parameter_values[parameter_name]
+
+################################################################################
 # Colormaps
 ################################################################################
 

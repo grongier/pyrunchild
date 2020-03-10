@@ -8,7 +8,7 @@ import numpy as np
 from scipy import stats
 
 from pyrunchild.manager import DataManager
-from pyrunchild.utils import divide_line, rename_old_file, RangeModel, BinaryModel, MixtureModel, MemoryModel, DependencyModel, ConstrainedTimeSeries
+from pyrunchild.utils import divide_line, rename_old_file, RangeModel, BinaryModel, MixtureModel, MemoryModel, DependencyModel, ConstrainedTimeSeries, TwoGrainsModel
 
 ################################################################################
 # InputWriter
@@ -1214,6 +1214,9 @@ class InputWriter(DataManager):
                                                                         base_name=self.parameter_values[realization]['OUTFILENAME'],
                                                                         save_previous_file=save_previous_file,
                                                                         random_state=random_state)
+        elif isinstance(value, TwoGrainsModel) == True:
+            self.parameter_values[realization][parameter] = value.rvs(parameter,
+                                                                      random_state=random_state)
         else:
             self.parameter_values[realization][parameter] = value
 
@@ -1336,6 +1339,8 @@ class InputWriter(DataManager):
                     value = line.split(':')[0]
                     try:
                         value = float(value)
+                    except ValueError:
+                        pass
                     finally:
                         parameter_values[file_parameter] = value
                     found_parameters[parameters.index(file_parameter)] = True
