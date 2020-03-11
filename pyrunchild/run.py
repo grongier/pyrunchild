@@ -3,6 +3,7 @@
 ################################################################################
 
 import os
+from glob import glob
 import time
 import subprocess
 import sys
@@ -108,6 +109,7 @@ class Child(InputWriter):
             resolve_parameters=False,
             max_attempts=1,
             save_previous_input_file=True,
+            extensions_to_remove=None,
             return_parameter_values=False):
 
         random_state = np.random.RandomState(self.seed + realization)
@@ -211,6 +213,15 @@ class Child(InputWriter):
                     for line in stdout.split('\n'):
                         print(line)
 
+        if extensions_to_remove is not None:
+            for extension in extensions_to_remove:
+                file_name = self.parameter_values[realization]['OUTFILENAME'] + extension
+                file_base_path = self.base_directory + '/' + file_name
+                file_paths = glob(file_base_path)
+                for path in file_paths:
+                    if os.path.isfile(path):
+                        os.remove(path)
+
         if return_parameter_values == True:
             return self.base_names[realization], self.parameter_values[realization]
 
@@ -226,6 +237,7 @@ class Child(InputWriter):
                   update_seed=True,
                   resolve_parameters=False,
                   save_previous_input_file=True,
+                  extensions_to_remove=None,
                   max_attempts=1):
 
         if n_jobs == -1:
@@ -247,6 +259,7 @@ class Child(InputWriter):
                                        resolve_parameters=resolve_parameters,
                                        max_attempts=max_attempts,
                                        save_previous_input_file=save_previous_input_file,
+                                       extensions_to_remove=extensions_to_remove,
                                        return_parameter_values=True),
                                range(self.nb_realizations),
                                chunksize=chunksize)
