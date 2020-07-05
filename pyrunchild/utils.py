@@ -337,7 +337,8 @@ class ConstrainedTimeSeries:
         while (((self.values[key][-1] != self.main_constraint.final_value
                  and self.times[key][-1] != self.main_constraint.final_time)
                 or self.times[key][-1] > self.max_run_time
-                or any(x < self.main_constraint.minimal_value for x in self.values[key]) == True)
+                or (self.main_constraint.minimal_value is not None
+                    and any(x < self.main_constraint.minimal_value for x in self.values[key]) == True))
                and iter_count < max_iter):
 
             self.times[key] = [self.main_constraint.initial_time]
