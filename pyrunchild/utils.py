@@ -255,6 +255,7 @@ class TimeSeriesConstraint:
                  initial_value=None,
                  rate=None,
                  final_value=None,
+                 minimal_value=None,
                  value=None,
                  vmin=None,
                  vmax=None,
@@ -277,6 +278,7 @@ class TimeSeriesConstraint:
         self.rate = rate
         self.initial_value = initial_value
         self.final_value = final_value
+        self.minimal_value = minimal_value
         self.value = value
         self.autocorr = autocorr
         self.mode = mode
@@ -334,7 +336,8 @@ class ConstrainedTimeSeries:
         iter_count = 0
         while (((self.values[key][-1] != self.main_constraint.final_value
                  and self.times[key][-1] != self.main_constraint.final_time)
-                or self.times[key][-1] > self.max_run_time)
+                or self.times[key][-1] > self.max_run_time
+                or any(x < self.main_constraint.minimal_value for x in self.values[key]) == True)
                and iter_count < max_iter):
 
             self.times[key] = [self.main_constraint.initial_time]
