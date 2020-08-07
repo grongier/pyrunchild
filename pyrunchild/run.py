@@ -95,22 +95,22 @@ class Child(InputWriter):
                 process.terminate()
                 return 'Reason: File ' + file_name + ' has not been modified for the last ' + str(max_time) + 's at runtime ' + str(runtime) + 's\n'
 
-    def run(self,
-            realization=0,
-            input_name=None,
-            silent_mode=False,
-            print_log=False,
-            write_log=False,
-            timeout=None,
-            file_timeout=None,
-            max_ellapsed_time=1e8,
-            file_type=None,
-            update_seed=True,
-            resolve_parameters=False,
-            max_attempts=1,
-            save_previous_input_file=True,
-            extensions_to_remove=None,
-            return_parameter_values=False):
+    def run_file_check(self,
+                       realization=0,
+                       input_name=None,
+                       silent_mode=False,
+                       print_log=False,
+                       write_log=False,
+                       timeout=None,
+                       file_timeout=None,
+                       max_ellapsed_time=1e8,
+                       file_type=None,
+                       update_seed=True,
+                       resolve_parameters=False,
+                       max_attempts=1,
+                       save_previous_input_file=True,
+                       extensions_to_remove=None,
+                       return_parameter_values=False):
 
         random_state = np.random.RandomState(self.seed + realization)
         if input_name is None:
@@ -225,15 +225,154 @@ class Child(InputWriter):
         if return_parameter_values == True:
             return self.base_names[realization], self.parameter_values[realization]
 
+    def multi_run_file_check(self,
+                             n_jobs=-1,
+                             chunksize=1,
+                             print_log=False,
+                             write_log=False,
+                             timeout=None,
+                             file_timeout=None,
+                             max_ellapsed_time=1e8,
+                             file_type='storm',
+                             update_seed=True,
+                             resolve_parameters=False,
+                             save_previous_input_file=True,
+                             extensions_to_remove=None,
+                             max_attempts=1):
+
+        if n_jobs == -1:
+            try:
+                n_jobs = int(os.environ["SLURM_NTASKS"])
+            except KeyError:
+                n_jobs = mp.cpu_count()
+
+        with mp.Pool(processes=n_jobs) as pool:
+
+            results = pool.map(partial(self.run_file_check,
+                                       print_log=print_log,
+                                       write_log=write_log,
+                                       timeout=timeout,
+                                       file_timeout=file_timeout,
+                                       max_ellapsed_time=max_ellapsed_time,
+                                       file_type=file_type,
+                                       update_seed=update_seed,
+                                       resolve_parameters=resolve_parameters,
+                                       max_attempts=max_attempts,
+                                       save_previous_input_file=save_previous_input_file,
+                                       extensions_to_remove=extensions_to_remove,
+                                       return_parameter_values=True),
+                               range(self.nb_realizations),
+                               chunksize=chunksize)
+
+            self.base_names, self.parameter_values = zip(*results)
+            self.base_names = list(self.base_names)
+            self.parameter_values = list(self.parameter_values)
+
+    def run(self,
+            realization=0,
+            input_name=None,
+            silent_mode=False,
+            print_log=False,
+            write_log=False,
+            timeout=None,
+            update_seed=True,
+            resolve_parameters=False,
+            max_attempts=1,
+            save_previous_input_file=True,
+            extensions_to_remove=None,
+            return_parameter_values=False):
+
+        random_state = np.random.RandomState(self.seed + realization)
+        if input_name is None:
+            if self.base_names[realization] is None:
+                self.write_input_file(realization,
+                                      save_previous_file=save_previous_input_file,  
+                                      random_state=random_state)
+            input_name = self.base_names[realization]
+
+        options = ''
+        if silent_mode == True:
+            options = '--silent-mode'
+
+        success = False
+        attempt = 0
+        while success == False and attempt < max_attempts:
+
+            with ExitStack() as stack:
+
+                init_realization_nb = 0
+                if self.init_realization_nb is not None:
+                    init_realization_nb = self.init_realization_nb
+
+                if attempt > 0:
+                    if update_seed == True:
+                        self.parameter_values[realization]['SEED'] += self.nb_realizations
+                    if resolve_parameters == False:
+                        random_state.seed(self.seed + realization)
+                    self.write_input_file(realization,
+                                          resolve_parameters=resolve_parameters,
+                                          save_previous_file=save_previous_input_file,
+                                          random_state=random_state)
+
+                stdout = subprocess.DEVNULL
+                if print_log == True:
+                    stdout = subprocess.PIPE
+                elif write_log == True:
+                    stdout = stack.enter_context(open(os.path.join(self.base_directory,
+                                                                   input_name + '.log'),
+                                                      'w'))
+                try:
+                    _ = subprocess.run([self.child_executable, options, input_name + '.in'],
+                                       stdout=stdout, 
+                                       stderr=subprocess.PIPE, # subprocess.DEVNULL
+                                       cwd=self.base_directory,
+                                       timeout=timeout,
+                                       check=True,
+                                       text=True)
+                except (subprocess.SubprocessError, subprocess.TimeoutExpired) as error:
+                    message = 'Realization ' + str(init_realization_nb + realization) + ': Failed attempt ' + str(attempt + 1) + '/' + str(max_attempts) + '\n'
+                    message += 'Reason: ' + str(error) + '\n'
+                    print(message, end='')
+
+                    error_file_path = os.path.join(self.base_directory,
+                                                   self.parameter_values[realization]['OUTFILENAME'] + '.err')
+                    with open(error_file_path, 'a') as file:
+                        file.write(message)
+
+                    if print_log == True:
+                        print('\nLOG:')
+                        output = error.stdout
+                        if isinstance(output, (bytes, bytearray)):
+                            output = output.decode()
+                        for line in output.split('\n'):
+                            print(line)
+                    if error.stderr is not None:
+                        print('ERROR:')
+                        for line in error.stderr.split('\n'):
+                            print(line)
+
+                    attempt += 1
+                else:
+                    success = True
+
+        if extensions_to_remove is not None:
+            for extension in extensions_to_remove:
+                file_name = self.parameter_values[realization]['OUTFILENAME'] + extension
+                file_base_path = self.base_directory + '/' + file_name
+                file_paths = glob(file_base_path)
+                for path in file_paths:
+                    if os.path.isfile(path):
+                        os.remove(path)
+
+        if return_parameter_values == True:
+            return self.base_names[realization], self.parameter_values[realization]
+
     def multi_run(self,
                   n_jobs=-1,
                   chunksize=1,
                   print_log=False,
                   write_log=False,
                   timeout=None,
-                  file_timeout=None,
-                  max_ellapsed_time=1e8,
-                  file_type='storm',
                   update_seed=True,
                   resolve_parameters=False,
                   save_previous_input_file=True,
@@ -252,9 +391,6 @@ class Child(InputWriter):
                                        print_log=print_log,
                                        write_log=write_log,
                                        timeout=timeout,
-                                       file_timeout=file_timeout,
-                                       max_ellapsed_time=max_ellapsed_time,
-                                       file_type=file_type,
                                        update_seed=update_seed,
                                        resolve_parameters=resolve_parameters,
                                        max_attempts=max_attempts,
