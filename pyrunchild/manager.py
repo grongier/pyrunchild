@@ -191,11 +191,18 @@ class DataManager(object):
         else:
             return output
 
-    def read_layers(self, file_nb, realization=None, to_array=False):
+    def read_layers(self, file_nb=None, realization=None, to_array=False):
         
         layers = []
         max_nb_layers = 0
 
+        if file_nb is None:
+            layers_files = glob(self.base_name + '*.lay*')
+            layers_files = sorted_alphanumeric(layers_files)
+            if len(layers_files) > 0:
+                file_nb = layers_files[-1].split('.')[-1][3:]
+            else:
+                return None
         file_suffix = ''
         if realization is not None:
             file_suffix = '_' + str(realization)
@@ -231,10 +238,10 @@ class DataManager(object):
                     layer_line = layer_line.rstrip(' \n').split(' ')
                     grain_size_fractions = [float(i)/thickness for i in layer_line]
                     
-                    node_layers.append([thickness,
-                                        creation_time,
+                    node_layers.append([creation_time,
                                         activation_time,
                                         exposure_time,
+                                        thickness,
                                         erodibility,
                                         is_regolith] + grain_size_fractions)
                     
@@ -784,6 +791,16 @@ class DataManager(object):
         preservation_potential['subsurface2'] = np.loadtxt(path, skiprows=2)
 
         return preservation_potential
+
+    def read_meander(self, realization=None):
+
+        file_suffix = ''
+        if realization is not None:
+            file_suffix = '_' + str(realization)
+            
+        path = self.base_name + file_suffix + '.meander'
+
+        return np.loadtxt(path)
         
     def write_file(self, array, filename, add_size=False, time=None):
 
