@@ -1,6 +1,27 @@
-################################################################################
-# Imports
-################################################################################
+"""CHILD input file writer"""
+
+# The MIT License (MIT)
+# Copyright (c) 2020 CSIRO
+#
+# Author: Guillaume Rongier
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+
 
 import os
 from collections import OrderedDict
@@ -8,14 +29,38 @@ import numpy as np
 from scipy import stats
 
 from pyrunchild.manager import DataManager
-from pyrunchild.utils import divide_line, rename_old_file, RangeModel, BinaryModel, MixtureModel, MemoryModel, DependencyModel, ConstrainedTimeSeries, TwoGrainsModel
+from pyrunchild.utils import divide_line, rename_old_file
+from pyrunchild.utils import (RangeModel, BinaryModel, MixtureModel, MemoryModel,
+                              DependencyModel, TwoGrainsModel, ConstrainedTimeSeries)
+
 
 ################################################################################
 # InputWriter
-################################################################################
 
 class InputWriter(DataManager):
+    """
+    Class to define or draw CHILD's parameter values and write one or several
+    input files.
     
+    Parameters
+    ----------
+    base_directory : str
+        Directory to read and write files.
+    base_name : str
+        Base name of CHILD's files.
+    nb_realizations : int (default 1)
+        Number of simulations.
+    init_realization_nb : int (default 0)
+        Number of the first simulation.
+    preset_parameters : bool (default True)
+        If true, presets CHILD's parameters with default values. It is strongly
+        advised to keep this true, because CHILD always requires some
+        parameters in its input values, even when those parameters aren't
+        actually required in a simulation.
+    seed : int (default 42)
+        Seed used for the random draw of parameter values, if required.
+        
+    """
     def __init__(self,
                  base_directory,
                  base_name,
@@ -1058,7 +1103,22 @@ class InputWriter(DataManager):
                         DF_RUNOUT_RULE=0,
                         DF_SCOUR_RULE=0,
                         DF_DEPOSITION_RULE=0):
-        
+        ''' Set the parameters for landsliding
+
+        @param OPT_LANDSLIDES: Option to turn on landsliding (default to false)
+        @param OPT_3D_LANDSLIDES: Option for determining which landslide function
+                                  to use (default to false)
+        @param FRICSLOPE: Tangent of angle of repose for soil (unitless)
+        @param DF_RUNOUT_RULE: Set runout rules:
+                               0. No debris flow runout
+                               1. Runout exits domain
+        @param DF_SCOUR_RULE: Set scour rules:
+                              0. No debris flow scour
+                              1. Scour all sediment
+        @param DF_DEPOSITION_RULE: Set deposition rules:
+                                   0. No debris flow deposition
+
+        '''
 #         print('Landsliding also requires ROCKDENSITYINIT and WOODDENSITY (see material_parameters)')
         
         self.parameters['OPT_LANDSLIDES'] = OPT_LANDSLIDES
@@ -1209,14 +1269,14 @@ class InputWriter(DataManager):
             self.parameter_values[realization][parameter] = value
         elif isinstance(value, (stats._distn_infrastructure.rv_frozen, RangeModel, BinaryModel, MixtureModel, MemoryModel, DependencyModel)) == True:
             self.parameter_values[realization][parameter] = value.rvs(random_state=random_state)
+        elif isinstance(value, TwoGrainsModel) == True:
+            self.parameter_values[realization][parameter] = value.rvs(parameter,
+                                                                      random_state=random_state)
         elif isinstance(value, ConstrainedTimeSeries) == True:
             self.parameter_values[realization][parameter] = value.write(parameter,
                                                                         base_name=self.parameter_values[realization]['OUTFILENAME'],
                                                                         save_previous_file=save_previous_file,
                                                                         random_state=random_state)
-        elif isinstance(value, TwoGrainsModel) == True:
-            self.parameter_values[realization][parameter] = value.rvs(parameter,
-                                                                      random_state=random_state)
         else:
             self.parameter_values[realization][parameter] = value
 

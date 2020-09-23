@@ -1,42 +1,52 @@
-################################################################################
-# Imports
-################################################################################
+"""CHILD files manager"""
+
+# The MIT License (MIT)
+# Copyright (c) 2020 CSIRO
+#
+# Author: Guillaume Rongier
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+
 
 import os
-import re
 from glob import glob
-import h5py
-
 import numpy as np
 from scipy import interpolate
 # from numba import jit
 
-from pyrunchild.utils import griddata_idw
+from pyrunchild.utils import sorted_alphanumeric
 
-################################################################################
-# Miscellaneous
-################################################################################
-
-def sorted_alphanumeric(l):
-    '''
-    Sort a list of strings with numbers
-    @param l: The list
-    @return The sorted list
-    '''
-    def convert(text):
-        return int(text) if text.isdigit() else text
-
-    def alphanum_key(key):
-        return [convert(c) for c in re.split('([0-9]+)', key)]
-
-    return sorted(l, key=alphanum_key)
 
 ################################################################################
 # DataManager
-################################################################################
 
-class DataManager(object):
+class DataManager:
+    """
+    Base class to read and write files for CHILD.
     
+    Parameters
+    ----------
+    base_directory : str
+        Directory to read and write files.
+    base_name : str
+        Base name of CHILD's files.
+        
+    """
     def __init__(self,
                  base_directory,
                  base_name):
@@ -50,7 +60,9 @@ class DataManager(object):
                    realization=None,
                    read_boundary_flag=True,
                    read_edge_id=True):
-
+        """
+        Reads the .nodes and .z files created by a CHILD simulation.
+        """
         time_slices = []
         nodes = []
 
@@ -99,7 +111,9 @@ class DataManager(object):
     def read_triangles(self,
                        realization=None,
                        return_array=True):
-
+        """
+        Reads the .tri file created by a CHILD simulation.
+        """
         time_slices = []
         triangles = []
 
@@ -133,7 +147,9 @@ class DataManager(object):
                          file_type,
                          realization=None,
                          return_array=False):
-        
+        """
+        Reads the any output file created by a CHILD simulation.
+        """
         if file_type[0] != '.':
             file_type = '.' + file_type
 
@@ -172,7 +188,9 @@ class DataManager(object):
                   file_name,
                   is_size=False,
                   return_array=True):
-
+        """
+        Reads any file.
+        """
         output = []
 
         with open(os.path.join(self.base_directory, file_name)) as file:
@@ -192,7 +210,9 @@ class DataManager(object):
             return output
 
     def read_layers(self, file_nb=None, realization=None, to_array=False):
-        
+        """
+        Reads a .lay* file created by a CHILD simulation.
+        """
         layers = []
         max_nb_layers = 0
 
@@ -260,7 +280,9 @@ class DataManager(object):
         return layers
 
     def read_channel_map(self, file_nb=None, realization=None):
-
+        """
+        Reads a .channelmap* file created by a CHILD simulation.
+        """
         if file_nb is None:
             channel_map_files = glob(self.base_name + '*.channelmap*')
             channel_map_files = sorted_alphanumeric(channel_map_files)
@@ -295,7 +317,9 @@ class DataManager(object):
         return channel_map
 
     def read_top_layer(self, height=None, width=None, file_nb=None, realization=None):
-
+        """
+        Reads a .top* file created by a CHILD simulation.
+        """
         if file_nb is None:
             top_files = glob(self.base_name + '*.top*')
             top_files = sorted_alphanumeric(top_files)
@@ -335,7 +359,9 @@ class DataManager(object):
         return top_layer
 
     def read_lithology(self, file_nb=None, realization=None):
-
+        """
+        Reads a .litho* file created by a CHILD simulation.
+        """
         if file_nb is None:
             lithology_files = glob(self.base_name + '*.litho*')
             lithology_files = sorted_alphanumeric(lithology_files)
@@ -380,7 +406,9 @@ class DataManager(object):
                              boundary=0,
                              file_nb=None,
                              realization=None):
-
+        """
+        Extracts a layer boundary from a .litho* file created by a CHILD simulation.
+        """
         boundary_map = self.read_channel_map(file_nb=file_nb,
                                              realization=realization)[:3]
         
@@ -394,71 +422,6 @@ class DataManager(object):
 
         return boundary_map
 
-    @staticmethod    
-    # @jit(nopython=True)
-    def _resample_lithology_columns(grid,
-                                    data,
-                                    channel_map,
-                                    lithology,
-                                    basement_layers):
-
-        for j in range(grid.shape[2]):
-            for i in range(grid.shape[3]):
-
-                n = j*channel_map.shape[2] + i
-                l = 0
-                layer_nb = len(lithology[n]) + basement_layers
-                z_interface = channel_map[2, j, i]
-
-                for k in range(grid.shape[1] - 1, -1, -1):
-
-                    if grid[0, k, j, i] <= z_interface and l < layer_nb:
-
-                        while not (grid[0, k, j, i] <= z_interface
-                                   and grid[0, k, j, i] > z_interface - lithology[n][l][0]):
-                            z_interface -= lithology[n][l][0]
-                            l += 1
-
-                        if l < layer_nb:
-                            data[1:, k, j, i] = lithology[n][l]
-                            data[0, k, j, i] = 1
-                        else:
-                            data[1:, k, j, i] = lithology[n][l]
-                            data[0, k, j, i] = 2
-
-                    elif l >= layer_nb:
-                        data[1:, k, j, i] = lithology[n][l]
-                        data[0, k, j, i] = 2
-
-        return np.concatenate((grid, data))
-
-    def build_regular_lithology_grid_by_columns(self,
-                                                z_min,
-                                                z_max,
-                                                z_step,
-                                                basement_layers=-1,
-                                                file_nb=None,
-                                                realization=None):
-
-        channel_map = self.read_channel_map(file_nb=file_nb,
-                                            realization=realization)
-        lithology = self.read_lithology(file_nb=file_nb,
-                                        realization=realization)
-
-        x = channel_map[0, 0]
-        y = channel_map[1, :, 0]
-        z = np.arange(z_min + z_step/2, z_max, z_step)
-        grid = np.array(np.meshgrid(z, y, x, indexing='ij'))
-        data = np.zeros((5,) + grid.shape[1:])
-
-        lithology = DataManager._resample_lithology_columns(grid,
-                                                            data,
-                                                            channel_map,
-                                                            lithology,
-                                                            basement_layers)
-
-        return lithology
-
     @staticmethod
     # @jit(nopython=True)
     def _interpolate_lithology_columns(z_cells,
@@ -466,7 +429,10 @@ class DataManager(object):
                                        channel_map,
                                        lithology,
                                        basement_layers):
-        
+        """
+        Interpolates the layer columns of a .litho* file created by a CHILD
+        simulation into regularly sampled columns.
+        """
         regular_cell_arrays = np.full((5, z_cells.shape[0]) + channel_map.shape[1:], np.nan)
         z_step = z_points[1] - z_points[0]
 
@@ -533,7 +499,10 @@ class DataManager(object):
                                      basement_layers=2,
                                      file_nb=None,
                                      realization=None):
-
+        """
+        Interpolates a .litho* file created by a CHILD simulation into a
+        regular grid.
+        """
         channel_map = self.read_channel_map(file_nb=file_nb,
                                             realization=realization)
         lithology = self.read_lithology(file_nb=file_nb,
@@ -562,7 +531,10 @@ class DataManager(object):
                 'cell_arrays': regular_cell_arrays}
 
     def interpolate_channel_map_points(self, channel_map, kind='cubic'):
-        
+        """
+        Interpolates a .channelmap* file created by a CHILD simulation from
+        cell-centered to node-centered properties.
+        """
         spacing = (channel_map[0, 0, 1] - channel_map[0, 0, 0],
                    channel_map[1, 1, 0] - channel_map[1, 0, 0])
         extent = (channel_map[0, 0, 0] - spacing[0]/2,
@@ -600,7 +572,10 @@ class DataManager(object):
                              interpolation='linear',
                              file_nb=None,
                              realization=None):
-
+        """
+        Interpolates a .litho* file created by a CHILD simulation into a
+        curvilinear grid.
+        """
         channel_map = self.read_channel_map(file_nb=file_nb,
                                             realization=realization)
         lithology = self.read_lithology(file_nb=file_nb,
@@ -666,104 +641,12 @@ class DataManager(object):
 
         return grid
 
-    def add_basement_layers(self,
-                            lithology,
-                            nb_layers,
-                            layer_thickness,
-                            nodes='cells'):
-
-        basement = np.empty(lithology[nodes].shape[0:1] + (nb_layers,) + lithology['cells'].shape[2:])
-        basement[0:2] = lithology[nodes][0:2, 0:1]
-        basement[2, nb_layers - 1] = lithology[nodes][2, 0] - 0.5
-        for i in range(nb_layers - 2, -1, -1):
-            basement[2, i] = basement[2, i + 1] - 0.5
-
-        basement_arrays = np.full(lithology['cell_arrays'].shape[0:1] + (nb_layers,) + lithology['cell_arrays'].shape[2:],
-                                  np.nan)
-        basement_arrays[0] = layer_thickness
-        
-        lithology[nodes] = np.concatenate((basement, lithology[nodes]), axis=1)
-        lithology['cell_arrays'] = np.concatenate((basement_arrays, lithology['cell_arrays']),
-                                                  axis=1)
-        
-        return lithology
-
-    def add_basement_variable(self, lithology, nb_basement_layers):
-        
-        basement = np.zeros((1,) + lithology['cell_arrays'].shape[1:])
-        basement[0, 0:nb_basement_layers] = 1
-        # basement[0, np.isnan(lithology['cell_arrays'][0])] = np.nan
-        
-        lithology['cell_arrays'] = np.concatenate((basement,
-                                                   lithology['cell_arrays']))
-        
-        return lithology
-
-    def interpolate_regular_lithology_grid(self,
-                                           z_min,
-                                           z_max,
-                                           z_step,
-                                           basement_layers=2,
-                                           nb_neighbors=6,
-                                           p=4,
-                                           file_nb=None,
-                                           realization=None):
-        
-        lithology_cells = self.build_lithology_grid(basement_layers=basement_layers,
-                                                    return_points=False,
-                                                    return_cells=True,
-                                                    file_nb=file_nb,
-                                                    realization=realization)
-        lithology_cells = self.add_basement_layers(lithology_cells,
-                                                   1,
-                                                   0.5,
-                                                   nodes='cells')
-        lithology_cells = self.add_basement_variable(lithology_cells, 1)
-        
-        x = lithology_cells['cells'][0, 0, 0]
-        y = lithology_cells['cells'][1, 0, :, 0]
-        z = np.arange(z_min + z_step/2, z_max, z_step)
-        regular_cells = np.array(np.meshgrid(z, y, x, indexing='ij'))[::-1]
-        
-        regular_cell_arrays = np.full((1 + lithology_cells['cell_arrays'].shape[0],) + regular_cells.shape[1:],
-                                      np.nan)
-
-        regular_cell_arrays[0, regular_cells[2] > lithology_cells['cells'][2:3, -1]] = 0
-        regular_cell_arrays[0, (regular_cells[2] <= lithology_cells['cells'][2:3, -1])
-                               & (regular_cells[2] >= lithology_cells['cells'][2:3, 0])] = 1
-        regular_cell_arrays[0, regular_cells[2] < lithology_cells['cells'][2:3, 0]] = 2
-        
-        regular_cell_arrays[2:, regular_cell_arrays[0] == 1] = griddata_idw(lithology_cells['cells'][:, ~np.isnan(lithology_cells['cell_arrays'][2])].T,
-                                                                            lithology_cells['cell_arrays'][1:, ~np.isnan(lithology_cells['cell_arrays'][2])],
-                                                                            regular_cells[:, regular_cell_arrays[0] == 1].T,
-                                                                            nb_neighbors=nb_neighbors,
-                                                                            p=p)
-
-        regular_cell_arrays[1, regular_cell_arrays[0] == 0] = 0
-        regular_cell_arrays[1, regular_cell_arrays[0] == 1] = griddata_idw(lithology_cells['cells'][:, ~np.isnan(lithology_cells['cell_arrays'][0])].T,
-                                                                           lithology_cells['cell_arrays'][0:1, ~np.isnan(lithology_cells['cell_arrays'][0])],
-                                                                           regular_cells[:, regular_cell_arrays[0] == 1].T,
-                                                                           nb_neighbors=nb_neighbors,
-                                                                           p=p)
-        regular_cell_arrays[1, regular_cell_arrays[0] == 2] = 1
-
-        spacing = (regular_cells[0, 0, 0, 1] - regular_cells[0, 0, 0, 0],
-                   regular_cells[1, 0, 1, 0] - regular_cells[1, 0, 0, 0],
-                   z_step)
-        extent = ((regular_cells[0, 0, 0, 0] - spacing[0]/2,
-                   regular_cells[0, 0, 0, -1] + spacing[0]/2),
-                  (regular_cells[1, 0, 0, 0] - spacing[1]/2,
-                   regular_cells[1, 0, -1, 0] + spacing[1]/2),
-                  (z_min,
-                   z_max))
-        
-        return {'extent': np.array(extent),
-                'spacing': np.array(spacing),
-                'cell_arrays': regular_cell_arrays}
-
     @staticmethod
     def _read_preservation_potential(path):
-        
+        """
+        Reads a .presSurface or .presSubsurface file created by a CHILD
+        simulation.
+        """
         with open(path) as file:
             lines = []
             for line in file:
@@ -776,7 +659,10 @@ class DataManager(object):
         return preservation_potential
 
     def read_preservation_potential(self, realization=None):
-        
+        """
+        Reads a .presSurface, .presSubsurface, and .presSubsurface2 file
+        created by a CHILD simulation.
+        """
         preservation_potential = dict()
 
         file_suffix = ''
@@ -793,7 +679,9 @@ class DataManager(object):
         return preservation_potential
 
     def read_meander(self, realization=None):
-
+        """
+        Reads a .meander file created by a CHILD simulation.
+        """
         file_suffix = ''
         if realization is not None:
             file_suffix = '_' + str(realization)
@@ -803,7 +691,9 @@ class DataManager(object):
         return np.loadtxt(path)
         
     def write_file(self, array, filename, add_size=False, time=None):
-
+        """
+        Writes any array to a file following CHILD's format.
+        """
         with open(os.path.join(self.base_directory, filename), 'w') as file:
             
             if time is not None:
@@ -821,7 +711,10 @@ class DataManager(object):
                     file.write('\n')
 
     def write_points(self, array, filename, add_size=True):
-
+        """
+        Writes points following the format (x, y, x, boundary), for instance to
+        define CHILD's simulation grid outside of CHILD.
+        """
         with open(os.path.join(self.base_directory, filename + '.points'), 'w') as file:
             
             if add_size == True:
@@ -832,7 +725,9 @@ class DataManager(object):
                 file.write(str(int(array[i, -1])) + '\n')
                     
     def write_uplift_map(self, uplift_map, file_name='upliftmap', file_nb=1):
-        
+        """
+        Writes an uplift map into a file following CHILD format.
+        """
         padding = ''
         if file_nb < 10:
             padding = '00'
@@ -841,10 +736,13 @@ class DataManager(object):
 
         self.write_file(uplift_map, file_name + padding + str(file_nb))
         
-    def write_uplift_maps(self, uplift_maps,
+    def write_uplift_maps(self,
+                          uplift_maps,
                           uplift_times,
                           file_name='upliftmap'):
-        
+        """
+        Writes several uplifts map into a file following CHILD format.
+        """
         for i, uplift_map in enumerate(uplift_maps):
             self.write_uplift_map(uplift_map,
                                   file_name=file_name,
@@ -854,52 +752,3 @@ class DataManager(object):
                                filename + 'times'), 'w') as file:
             for time in uplift_times:
                 file.write(str(time) + '\n')
-
-    def write_grid_to_gslib(self,
-                            grid,
-                            cell_size,
-                            file_name,
-                            variable_names):
-
-        with open(os.path.join(self.base_directory,
-                               file_name + '.dat'), 'w') as file:
-            
-            file.write(file_name + '\n')
-            file.write(str(grid.shape[0]))
-            for size in grid.shape[:0:-1]:
-                file.write(' ' + str(size))
-            for size in cell_size:
-                file.write(' ' + str(size/2))
-            for size in cell_size:
-                file.write(' ' + str(size))
-            file.write(' ' + str(1) + '\n')
-
-            grid = grid.reshape((grid.shape[0], -1)).T
-
-            for i in range(len(variable_names)):
-                file.write(variable_names[i] + '\n')
-            for i in range(grid.shape[0]):
-                for j in range(grid.shape[1] - 1):
-                    file.write(str(grid[i, j]) + ' ')
-                file.write(str(grid[i, -1]) + '\n')
-
-    def write_grid_to_pflotran(self,
-                               grid,
-                               file_name,
-                               variable_names,
-                               directory=None):
-        
-        if directory is None:
-            directory = self.base_directory
-        with h5py.File(os.path.join(directory,
-                                    file_name + '.h5'), mode='w') as h5file:
-            dataset_name = 'Cell Ids'
-            indices_array = np.zeros(np.prod(grid.shape[2:], dtype='int'), dtype='int')
-            for i in range(indices_array.shape[0]):
-                indices_array[i] = i + 1
-            h5dset = h5file.create_dataset(dataset_name, data=indices_array)
-            
-            for r in range(grid.shape[0]):
-                for v in range(grid.shape[1]):
-                    h5dset = h5file.create_dataset(variable_names[v] + str(r + 1),
-                                                   data=grid[r, v].ravel())

@@ -1,6 +1,27 @@
-################################################################################
-# Imports
-################################################################################
+"""CHILD utils"""
+
+# The MIT License (MIT)
+# Copyright (c) 2020 CSIRO
+#
+# Author: Guillaume Rongier
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+
 
 import os
 import re
@@ -13,21 +34,51 @@ from scipy.spatial import cKDTree
 import colorsys
 from matplotlib import colors
 
+
 ################################################################################
 # Miscellaneous
-################################################################################
 
 def divide_line(string,
                 line_size,
                 start_str='#   ',
                 join_str='\n#   ',
                 end_str='\n'):
-        
+    """
+    Divides a single-line string into several lines.
+
+    Parameters
+    ----------
+    string : str
+        The single-line string.
+    line_size : int
+        The line size.
+    start_str : str
+        A string to add at the beginning of new string.
+    join_str : str
+        A string to add between lines.
+    end_str : str
+        A string to add at the end of new string.
+
+    Returns
+    -------
+    str
+        The new string.
+
+    """
     return start_str + join_str.join(textwrap.wrap(string, line_size)) + end_str
 
 
 def rename_old_file(file_path):
+    """
+    Renames a file by adding '_old*' after its extension, where '*' is a number
+    that gets incremented as the number of old files grows.
 
+    Parameters
+    ----------
+    file_path : str
+        The path to the file.
+
+    """
     if os.path.isfile(file_path) == True:
         new_file_path = file_path + '_old'
         old_file_paths = glob(new_file_path + '*')
@@ -37,11 +88,20 @@ def rename_old_file(file_path):
 
 
 def sorted_alphanumeric(l):
-    '''
-    Sort a list of strings with numbers
-    @param l: The list
-    @return The sorted list
-    '''
+    """
+    Sorts a list of strings with numbers.
+
+    Parameters
+    ----------
+    l : list
+        The list to sort.
+
+    Returns
+    -------
+    list
+        The sorted list.
+
+    """
     def convert(text):
         return int(text) if text.isdigit() else text
 
@@ -51,60 +111,58 @@ def sorted_alphanumeric(l):
     return sorted(l, key=alphanum_key)
 
 
-class ReturnTimer(Timer):
-
-    def __init__(self, interval, function, args=[], kwargs={}):
-
-        self._original_function = function
-        super(ReturnTimer, self).__init__(interval,
-                                          self._do_execute,
-                                          args,
-                                          kwargs)
-        self.result = None
-
-    def _do_execute(self, *a, **kw):
-
-        self.result = self._original_function(*a, **kw)
-
-    def join(self):
-        
-        super(ReturnTimer, self).join()
-        return self.result
-
 ################################################################################
 # Interpolation
-################################################################################
 
-def griddata_idw(points, values, xi, nb_neighbors=8, p=2):
-    """ Interpolate unstructured D-dimensional data using the inverse distance
-        weighted interpolation
+def griddata_idw(points, values, xi, nb_neighbors=8, p=2.):
+    """
+    Interpolates unstructured D-dimensional data using the inverse distance
+    weighted interpolation.
 
-    @param points: ndarray of n data point coordinates, shape (n, D)
-    @param values: ndarray of n data point values from V variables, shape (n, V)
-    @param xi: ndarray of m data point coordinates, shape (m, D), at which to
-               interpolate
-    @param nb_neighbors: positive interger representing the number of neighbors
-                         to consider when interpolating each point
-    @param p: positive float representing the power parameter of the 
-              interpolation
+    Parameters
+    ----------
+    points : ndarray, shape (n, D)
+        Data point coordinates.
+    values : ndarray, shape (n, V)
+        Data values.
+    xi : ndarray, shape (m, D)
+        Point coordinates at which to interpolate the data.
+    n_neighbors : int (default 8)
+        Number of neighbors to consider when interpolating each point.
+    p : float (default 2.)
+        Power parameter of the interpolation.
 
-    @return a ndarray, shape (m, V), of interpolated values
+    Returns
+    -------
+    ndarray, shape (m, V)
+        Interpolated values.
+
     """
     tree = cKDTree(points)
 
-    distances, neighbors = tree.query(xi, k=nb_neighbors)
+    distances, neighbors = tree.query(xi, k=n_neighbors)
     weights = np.zeros((1,) + distances.shape)
     weights[0, :, 0] = 1
     weights[0, distances[:, 0] != 0] = 1/distances[distances[:, 0] != 0]**p
 
     return np.sum(weights*values[:, neighbors], axis=-1)/np.sum(weights, axis=-1)
 
-################################################################################
-# RangeModel
-################################################################################
 
-class RangeModel(object):
+################################################################################
+# Draw models
+
+class RangeModel:
+    """
+    Model in which the values aren't random, but are consecutive.
     
+    Parameters
+    ----------
+    start : int (default 0)
+        Initial value of the range.
+    step : int (default 1)
+        Step between two values of the range.
+        
+    """
     def __init__(self, start=0, step=1):
 
         self.start = start
@@ -119,12 +177,19 @@ class RangeModel(object):
             return samples[0]
         return samples
 
-################################################################################
-# BinaryModel
-################################################################################
 
-class BinaryModel(object):
+class BinaryModel:
+    """
+    Model in which a first value v1 is randomly drawn between 0 and 1, and a
+    second value v2 is equal to 1 - v1. The first value is returned with the
+    first call to rvs, the second value with the second call.
     
+    Parameters
+    ----------
+    model : scipy.stats' rv_continuous
+        Model from which to draw the first value.
+        
+    """
     def __init__(self, model):
         
         self.model = model
@@ -146,12 +211,19 @@ class BinaryModel(object):
             return self.last_sample[0]
         return self.last_sample
 
-################################################################################
-# MixtureModel
-################################################################################
 
-class MixtureModel(object):
+class MixtureModel:
+    """
+    Model in which the values are randomly drawn from several random models.
     
+    Parameters
+    ----------
+    submodels : list of scipy.stats' rv_continuous
+        Models from which to draw first values.
+    weights : array-like, optional (default None)
+        Weights of each sub-models to influence their selection.
+        
+    """
     def __init__(self, submodels, weights=None):
         
         self.submodels = submodels
@@ -175,12 +247,19 @@ class MixtureModel(object):
             return samples[0]
         return samples
 
-################################################################################
-# MemoryModel
-################################################################################
 
-class MemoryModel(object):
+class MemoryModel:
+    """
+    Model in which the same random value can be returned several times.
     
+    Parameters
+    ----------
+    model : scipy.stats' rv_continuous
+        Model from which to draw the values.
+    call_memory : int (default 1)
+        Number of times the same value is returned.
+        
+    """
     def __init__(self, model, call_memory=1):
         
         self.model = model
@@ -205,12 +284,19 @@ class MemoryModel(object):
             return self.last_sample[0]
         return self.last_sample
 
-################################################################################
-# DependencyModel
-################################################################################
 
-class DependencyModel(object):
+class DependencyModel:
+    """
+    Model in which the previous random values influence the new ones.
     
+    Parameters
+    ----------
+    model : scipy.stats' rv_continuous
+        Model from which to draw the values.
+    call_memory : int (default 1)
+        Number of times the same value is returned.
+        
+    """
     def __init__(self, model, call_memory=1):
         
         self.model = model
@@ -241,12 +327,120 @@ class DependencyModel(object):
             return self.last_sample[0]
         return self.last_sample
 
-################################################################################
-# Time series
-################################################################################
+
+class TwoGrainsModel:
+    """
+    Model to randomly draw grain sizes and their proportions in a two fractions
+    mixture.
+    
+    Parameters
+    ----------
+    coarse_diameter : float or scipy.stats' rv_continuous
+        Diameter of the coarse fraction.
+    fine_diameter : float or scipy.stats' rv_continuous
+        Diameter of the fine fraction.
+    coarse_proportion : float or scipy.stats' rv_continuous
+        Proportion of the coarse fraction. Must be between 0 and 1.
+    is_inlet : bool (default True)
+        True if an inlet is used in CHILD, false otherwise.
+    is_meandering : bool (default True)
+        True if the meandering mode is used in CHILD, false otherwise.
+        
+    """
+    def __init__(self,
+                 coarse_diameter,
+                 fine_diameter,
+                 coarse_proportion,
+                 is_inlet=True,
+                 is_meandering=True):
+
+        self.coarse_diameter = coarse_diameter
+        self.fine_diameter = fine_diameter
+        self.coarse_proportion = coarse_proportion
+        self.is_inlet = is_inlet
+        self.is_meandering = is_meandering
+
+        self.i_calls = 0
+        self.nb_calls = 6
+        if self.is_inlet == True:
+            self.nb_calls += 2
+        if self.is_meandering == True:
+            self.nb_calls += 1
+
+        self.parameter_values = dict()
+
+    def get_value(self, value, random_state=None):
+
+        if isinstance(value, (stats._distn_infrastructure.rv_frozen, MixtureModel, MemoryModel, DependencyModel)) == True:
+            return value.rvs(random_state=random_state)
+        return value
+
+    def draw_parameters(self, random_state=None):
+
+        self.parameter_values['GRAINDIAM1'] = self.get_value(self.coarse_diameter,
+                                                             random_state=random_state)
+        self.parameter_values['GRAINDIAM2'] = self.get_value(self.fine_diameter,
+                                                             random_state=random_state)
+        self.parameter_values['REGPROPORTION1'] = self.get_value(self.coarse_proportion,
+                                                                 random_state=random_state)
+        self.parameter_values['REGPROPORTION2'] = 1 - self.parameter_values['REGPROPORTION1']
+        self.parameter_values['BRPROPORTION1'] = self.parameter_values['REGPROPORTION1']
+        self.parameter_values['BRPROPORTION2'] = self.parameter_values['REGPROPORTION2']
+        if self.is_inlet == True:
+            self.parameter_values['INSEDLOAD1'] = self.parameter_values['REGPROPORTION1']
+            self.parameter_values['INSEDLOAD2'] = self.parameter_values['REGPROPORTION2']
+        if self.is_meandering == True:
+            self.parameter_values['MEDIAN_DIAMETER'] = self.parameter_values['GRAINDIAM1']*self.parameter_values['REGPROPORTION1'] \
+                                                       + self.parameter_values['GRAINDIAM2']*self.parameter_values['REGPROPORTION2']
+
+    def rvs(self, parameter_name, random_state=None):
+
+        if self.i_calls == 0:
+            self.draw_parameters(random_state=random_state)
+
+        self.i_calls += 1
+        if self.i_calls == self.nb_calls:
+            self.i_calls = 0
+
+        return self.parameter_values[parameter_name]
+
 
 class TimeSeriesConstraint:
+    """
+    Defines the constraints on one of CHILD's time series parameters. Not all
+    constraints are meant to work together, e.g., value and rate are mutually
+    exclusive. Not all configurations were thoroughly tested, so make sure to
+    test that it does what you want before using this.
     
+    Parameters
+    ----------
+    parameter : str
+        Name of the parameter to constrain. Valid values are:
+        'ST_PMEAN', 'ST_STDUR', 'ST_ISTDUR', 'UPRATE', 'FP_INLET_ELEVATION', 'FP_MU'
+    initial_time : float
+        Initial time of the time series.
+    time_steps : float or scipy.stats' rv_continuous
+        Time steps for the variations of the time series.
+    final_time : float, optional (default None)
+        Final time of the time series.
+    initial_value : float, optional (default None)
+        Initial value of the time series.
+    rate : float or scipy.stats' rv_continuous, optional (default None)
+        Rate of variation of the time series.
+    final_value : float, optional (default None)
+        Final value of the time series.
+    minimal_value : float, optional (default None)
+        Minimal value of the time series.
+    value : float or scipy.stats' rv_continuous, optional (default None)
+        Value of the time series.
+    autocorr : float, optional (default None)
+        Autocorrelation of the time series.
+    mode : str (default 'interpolate')
+        Interpolation mode of the time series in CHILD. 'interpolate' means
+        linear variations between time steps, 'forward' means constant values
+        between time steps.
+        
+    """
     def __init__(self,
                  parameter,
                  initial_time,
@@ -257,8 +451,6 @@ class TimeSeriesConstraint:
                  final_value=None,
                  minimal_value=None,
                  value=None,
-                 vmin=None,
-                 vmax=None,
                  autocorr=None,
                  mode='interpolate'):
         
@@ -284,7 +476,35 @@ class TimeSeriesConstraint:
         self.mode = mode
 
 class ConstrainedTimeSeries:
-
+    """
+    Model in which CHILD's time-series parameters are randomly drawn for one
+    or several parameters depending on predefined constraints.
+    
+    Parameters
+    ----------
+    main_constraint : TimeSeriesConstraint
+        Constraint on the main time-series parameter, which defines the final
+        time for all the time series.
+    other_constraints : list of TimeSeriesConstraint
+        Constraints on the other time-series parameters.
+    max_run_time : float (default np.inf)
+        Extra constraint on the final time of the time series to make sure that
+        simulation time cannot become an issue. Only useful when the main
+        constraint doesn't define a final time.
+    output_path : str (default '.')
+        Path to the directory in which the time-series files are created.
+        Default is the current directory.
+    inline : bool (default False)
+        If true, the time series are directly written in CHILD's input file.
+        CHILD has line length limit, so it only works for short time series.
+        If false, an extra file containing the time series is created, and
+        only its path is written in CHILD's input file.
+    set_out_intrvl : bool (default False)
+        If true, set CHILD's OPINTRVL parameter to the final time of the time
+        series, which means that CHILD is creating output files only once, at
+        the very end of the simulation.
+        
+    """
     def __init__(self,
                  main_constraint,
                  other_constraints=None,
@@ -507,72 +727,9 @@ class ConstrainedTimeSeries:
 
         return self.parameter_values[parameter_name]
 
-################################################################################
-# TwoGrainsModel
-################################################################################
-
-class TwoGrainsModel:
-
-    def __init__(self,
-                 coarse_diameter,
-                 fine_diameter,
-                 coarse_proportion,
-                 is_inlet=True,
-                 is_meandering=True):
-
-        self.coarse_diameter = coarse_diameter
-        self.fine_diameter = fine_diameter
-        self.coarse_proportion = coarse_proportion
-        self.is_inlet = is_inlet
-        self.is_meandering = is_meandering
-
-        self.i_calls = 0
-        self.nb_calls = 6
-        if self.is_inlet == True:
-            self.nb_calls += 2
-        if self.is_meandering == True:
-            self.nb_calls += 1
-
-        self.parameter_values = dict()
-
-    def get_value(self, value, random_state=None):
-
-        if isinstance(value, (stats._distn_infrastructure.rv_frozen, MixtureModel, MemoryModel, DependencyModel)) == True:
-            return value.rvs(random_state=random_state)
-        return value
-
-    def draw_parameters(self, random_state=None):
-
-        self.parameter_values['GRAINDIAM1'] = self.get_value(self.coarse_diameter,
-                                                             random_state=random_state)
-        self.parameter_values['GRAINDIAM2'] = self.get_value(self.fine_diameter,
-                                                             random_state=random_state)
-        self.parameter_values['REGPROPORTION1'] = self.get_value(self.coarse_proportion,
-                                                                 random_state=random_state)
-        self.parameter_values['REGPROPORTION2'] = 1 - self.parameter_values['REGPROPORTION1']
-        self.parameter_values['BRPROPORTION1'] = self.parameter_values['REGPROPORTION1']
-        self.parameter_values['BRPROPORTION2'] = self.parameter_values['REGPROPORTION2']
-        if self.is_inlet == True:
-            self.parameter_values['INSEDLOAD1'] = self.parameter_values['REGPROPORTION1']
-            self.parameter_values['INSEDLOAD2'] = self.parameter_values['REGPROPORTION2']
-        if self.is_meandering == True:
-            self.parameter_values['MEDIAN_DIAMETER'] = self.parameter_values['GRAINDIAM1']*self.parameter_values['REGPROPORTION1'] \
-                                                       + self.parameter_values['GRAINDIAM2']*self.parameter_values['REGPROPORTION2']
-
-    def rvs(self, parameter_name, random_state=None):
-
-        if self.i_calls == 0:
-            self.draw_parameters(random_state=random_state)
-
-        self.i_calls += 1
-        if self.i_calls == self.nb_calls:
-            self.i_calls = 0
-
-        return self.parameter_values[parameter_name]
 
 ################################################################################
 # Colormaps
-################################################################################
 
 def _build_sand_cmap(light_fraction_1,
                      light_fraction_2,
@@ -581,7 +738,32 @@ def _build_sand_cmap(light_fraction_1,
                      use_gold_sand=False,
                      reverse=False,
                      name='sand'):
-    
+    """
+    Builds a colormap following a sandy color scheme.
+
+    Parameters
+    ----------
+    light_fraction_1 : float
+        Light fraction of the first color.
+    light_fraction_2 : float
+        Light fraction of the second color.
+    light_fraction_3 : float
+        Light fraction of the third color.
+    light_fraction_4 : float
+        Light fraction of the fourth color.
+    use_gold_sand : bool (default False)
+        If true, uses Gold Sand as third color, otherwise uses Yuma Sand.
+    reverse : bool (default False)
+        If true, reverses the color list.
+    name : str (default 'sand')
+        Name of the colormap.
+
+    Returns
+    -------
+    cmap
+        The colormap.
+
+    """
     mississippi_mud = (15/360, 0.29 + light_fraction_1*0.29, 0.14)
     rio_grande_mud = (22/360, 0.48 + light_fraction_2*0.48, 0.33)
     yuma_sand = (50/360, 0.89 + light_fraction_3*0.89, 0.78)
@@ -598,15 +780,27 @@ def _build_sand_cmap(light_fraction_1,
     
     return colors.LinearSegmentedColormap.from_list(name, color_list)
 
+
 sand = _build_sand_cmap(-0.4, -0.18580532707557418, -0.47128079235588854, 0.0,
                         use_gold_sand=True,
-                        name="sand")
+                        name='sand')
+sand_r = _build_sand_cmap(-0.4, -0.18580532707557418, -0.47128079235588854, 0.0,
+                          use_gold_sand=True,
+                          reverse=True,
+                          name='sand_r')
 
 sand_light = _build_sand_cmap(0.25, 0.08543330133998818, -0.4679754966612923, 0.0,
                               use_gold_sand=False,
-                              name="sand_light")
+                              name='sand_light')
+sand_light_r = _build_sand_cmap(0.25, 0.08543330133998818, -0.4679754966612923, 0.0,
+                                use_gold_sand=False,
+                                reverse=True,
+                                name='sand_light_r')
 
 sand_extra_light = _build_sand_cmap(0.6, 0.24604133456286564, -0.4370096077612467, 0.0,
                                     use_gold_sand=False,
-                                    name="sand_extra_light")
-
+                                    name='sand_extra_light')
+sand_extra_light_r = _build_sand_cmap(0.6, 0.24604133456286564, -0.4370096077612467, 0.0,
+                                      use_gold_sand=False,
+                                      reverse=True,
+                                      name='sand_extra_light_r')
