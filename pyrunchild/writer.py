@@ -88,7 +88,10 @@ class InputWriter(DataManager):
         self.base_names = [None for r in range(self.nb_realizations)]
         
     def build_parameter_descriptions(self):
-        
+        """
+        Creates a dictionary with a description for each parameter of CHILD
+        when available in the documentation or in the code.
+        """
         parameter_descriptions = dict()
         # Run control
         parameter_descriptions['OUTFILENAME'] = 'Base name for output files'
@@ -373,7 +376,9 @@ class InputWriter(DataManager):
         return parameter_descriptions
     
     def print_parameter_descriptions(self):
-        
+        """
+        Prints the description of every parameter of CHILD.
+        """
         length = 0
         for parameter in self.parameter_descriptions:
             if len(parameter) > length:
@@ -389,11 +394,30 @@ class InputWriter(DataManager):
     def set_run_control(self,
                         OUTFILENAME=None,
                         DESCRIPTION='',
-                        RUNTIME=100000,
-                        OPINTRVL=1000,
-                        SEED=100,
-                        FSEED=100):
+                        RUNTIME=100000.,
+                        OPINTRVL=1000.,
+                        SEED=42,
+                        FSEED=42):
+        """
+        Sets the parameters controlling a simulation run.
         
+        Parameters
+        ----------
+        OUTFILENAME : str (default 'nodes')
+            Base name for output files.
+        DESCRIPTION : str (default '')
+            Description of the run to add to the input file.
+        RUNTIME : float (default 100000.)
+            Duration of run (yr).
+        OPINTRVL : float (default 1000.)
+            Frequency of output to files (yr).
+        SEED : int (default 42)
+            Seed for random number generation. Must be an integer.
+        FSEED : int (default 42)
+            Seed for random number generation (used in the vegetation module).
+            Must be an integer.
+            
+        """
         if OUTFILENAME is None:
             OUTFILENAME = self.out_file_name
         self.parameters['OUTFILENAME'] = OUTFILENAME
@@ -406,10 +430,10 @@ class InputWriter(DataManager):
     def set_mesh(self,
                  OPTREADINPUT=10,
                  OPTINITMESHDENS=0,
-                 X_GRID_SIZE=10000,
-                 Y_GRID_SIZE=10000,
+                 X_GRID_SIZE=10000.,
+                 Y_GRID_SIZE=10000.,
                  OPT_PT_PLACE=1,
-                 GRID_SPACING=200,
+                 GRID_SPACING=200.,
                  NUM_PTS='n/a',
                  INPUTDATAFILE='n/a',
                  INPUTTIME='n/a',
@@ -427,7 +451,80 @@ class InputWriter(DataManager):
                  OPTMESHADAPTAREA=0,
                  MESHADAPTAREA_MINAREA='n/a',
                  MESHADAPTAREA_MAXVAREA='n/a'):
+        """
+        Sets the parameters defining the mesh.
         
+        Parameters
+        ----------
+        OPTREADINPUT : int (default 10)
+            Option for initial mesh input or generation. Options include:
+            10 = creating a mesh from scratch;
+            1 = reading an existing mesh;
+            12 = reading in a set of (x,y,z,b) points (where b is a boundary code);
+            3 or 4 = reading from an ArcInfo grid.
+            If OPTREADINPUT=10, additional required parameters are:
+                X GRID_SIZE, Y GRID_SIZE, OPT_PT_PLACE, GRID_SPACING.
+            If OPTREADINPUT=1, additional required parameters are:
+                INPUTDATAFILE, INPUTTIME, and OPTINITMESHDENS.
+            If OPTREADINPUT=12, the parameter POINTFILENAME must also be included.
+        OPTINITMESHDENS : int (default 0)
+            Option for densifying the initial mesh by inserting a new node at
+            the circumcenter of each triangle. The value of this parameter is
+            the number of successive densification passes (for example, if 2,
+            then the mesh is densified twice).
+        X_GRID_SIZE : float (default 10000.)
+            Total length of model domain in x direction (m).
+        Y_GRID_SIZE : float (default 10000.)
+            Total length of model domain in y direction (m).
+        OPT_PT_PLACE : int (default 1)
+            Method of placing points when generating a new mesh:
+            0 = uniform hexagonal mesh;
+            1 = regular staggered (hexagonal) mesh with small random offsets in
+                (x, y) positions;
+            2 = random placement.
+        GRID_SPACING : float (default 200.)
+            Mean distance between grid nodes (m).
+        NUM_PTS : int (default 'n/a')
+            Number of points in grid interior, if random point positions are used.
+        INPUTDATAFILE : str (default 'n/a')
+            Base name of files from which input data will be read, if option for
+            reading input from a previous run is selected.
+        INPUTTIME : float (default 'n/a')
+            Time for which to read input, when re-starting from a previous run.
+        OPTREADLAYER : int (default 0)
+            Option for reading layers from input file when generating new mesh.
+            If set to zero, each node will be assigned a single bedrock layer
+            and a single regolith layer, with thicknesses determined by REGINIT
+            and BEDROCKDEPTH.
+        POINTFILENAME : str (default 'n/a')
+            Name of file containing (x,y,z,b) values for a series of points.
+            Used when OPTREADINPUT = 12.
+        ARCGRIDFILENAME : str (default 'n/a')
+            Name of ascii file in ArcInfo format containing initial DEM.
+        TILE_INPUT_PATH : str (default 'n/a')
+            Make irregular mesh from point tiles (files of x,y,z coords) for
+            node coordinates and a regular Arc grid for masking a custom area.
+        OPT_TILES_OR_SINGLE_FILE : int (default 0)
+        LOWER_LEFT_EASTING : float (default 'n/a')
+        LOWER_LEFT_NORTHING : float (default 'n/a')
+        NUM_TILES_EAST : int (default 'n/a')
+        NUM_TILES_NORTH : int (default 'n/a')
+        OPTMESHADAPTDZ : int (default 0)
+            If adaptive re-meshing is used, this option tells the model to add
+            nodes at locations where the local volumetric erosion rate exceeds
+            MESHADAPT_MAXNODEFLUX.
+        MESHADAPT_MAXNODEFLUX : float (default 'n/a')
+            For dynamic point addition: max ero flux rate.
+        OPTMESHADAPTAREA : int (default 0)
+            Option for increasing mesh density around areas of large drainage area.
+        MESHADAPTAREA_MINAREA : float (default 'n/a')
+            For dynamic re-meshing based on drainage area: minimum drainage area
+            for adaptive re-meshing.
+        MESHADAPTAREA_MAXVAREA : float (default 'n/a')
+            For dynamic re-meshing based on drainagearea: maximum Voronoi area
+            for nodes meeting the minimum area criterion.
+            
+        """
         self.parameters['OPTREADINPUT'] = OPTREADINPUT
         self.parameters['OPTINITMESHDENS'] = OPTINITMESHDENS
         self.parameters['X_GRID_SIZE'] = X_GRID_SIZE
@@ -463,12 +560,58 @@ class InputWriter(DataManager):
                        UPPER_BOUND_Z=0,
                        OPTINLET=0,
                        INDRAREA='n/a',
-                       INSEDLOADi=(0, 0, 0, 0, 0, 0, 0, 0, 0),
+                       INSEDLOADi=(0., 0., 0., 0., 0., 0., 0., 0., 0.),
                        INLET_X='n/a',
                        INLET_Y='n/a',
                        INLET_OPTCALCSEDFEED='n/a',
                        INLET_SLOPE='n/a'):
-        
+        """
+        Sets the parameters defining the boundaries.
+
+        Parameters
+        ----------
+        TYP_BOUND : int (default 1)
+            Configuration of boundaries with a rectangular mesh:
+            0 = open boundary in one corner;
+            1 = open boundary along x = 0;
+            2 = open boundaries along x = 0 and x = xmax;
+            3 = open boundaries along all four sides;
+            4 = single open boundary node at specified coordinates.
+        NUMBER_OUTLETS : int (default 0)
+            Number of outlets.
+        OUTLET_X_COORD : float (default 'n/a')
+            x coordinate of single-node outlet (open boundary) (m).
+        OUTLET_Y_COORD : float (default 'n/a')
+            y coordinate of single-node outlet (open boundary) (m).
+        MEAN_ELEV : float (default 0.)
+            Mean elevation of initial surface (m).
+        RAND_ELEV : float (default 1.)
+            Maximum amplitude of random variations in initial node elevations (m).
+        SLOPED_SURF : int (default 0)
+            Option for initial sloping surface (downward toward y = 0).
+        UPPER_BOUND_Z : float (default 0.)
+            If sloping initial surface is applied, this sets the slope by setting
+            the altitude of the model edge at y = ymax (m).
+        OPTINLET : int (default 0)
+            Option for an external water and sediment input at an inlet point.
+        INDRAREA : float (default 'n/a')
+            For runs with an inlet: drainage area of inlet stream (m2).
+        INSEDLOADi : array-like (default (0., 0., 0., 0., 0., 0., 0., 0., 0.) )
+            For runs with an inlet and specified sediment influx: input sediment
+            discharge of size fraction i (m3/yr).
+        INLET_X : float (default 'n/a')
+            For runs with an inlet: x position of the inlet (m).
+        INLET_Y : float (default 'n/a')
+            For runs with an inlet: y position of the inlet (m).
+        INLET_OPTCALCSEDFEED : float (default 'n/a')
+            For runs with an inlet: option for calculating sediment input at inlet
+            based on specified slope (INLETSLOPE) and bed grain-size distribution.
+        INLET_SLOPE : float (default 'n/a')
+            For runs with an inlet: if option for calculating rather than specifying
+            sediment discharge is chosen, this is the slope that is used to calculate
+            sediment discharge.
+
+        """
         self.parameters['TYP_BOUND'] = TYP_BOUND
         self.parameters['NUMBER_OUTLETS'] = NUMBER_OUTLETS
         self.parameters['OUTLET_X_COORD'] = OUTLET_X_COORD
@@ -488,9 +631,21 @@ class InputWriter(DataManager):
         
     def set_bedrock(self,
                     BEDROCKDEPTH=1e10,
-                    REGINIT=0,
-                    MAXREGDEPTH=100):
-        
+                    REGINIT=0.,
+                    MAXREGDEPTH=100.):
+        """
+        Sets the parameters defining the bedrock.
+
+        Parameters
+        ----------
+        BEDROCKDEPTH : float (default 1e10)
+            Starting thickness of bedrock layer (m).
+        REGINIT : float (default 0.)
+            Starting thickness of regolith layer (m).
+        MAXREGDEPTH : float (default 100.)
+            Depth of active layer, and maximum thickness of a deposited layer (m).
+
+        """
         self.parameters['BEDROCKDEPTH'] = BEDROCKDEPTH
         self.parameters['REGINIT'] = REGINIT
         self.parameters['MAXREGDEPTH'] = MAXREGDEPTH
@@ -503,9 +658,31 @@ class InputWriter(DataManager):
                       OPT_SET_ERODY_FROM_FILE=0,
                       ERODYFILE_NAME='n/a',
                       OPT_NEW_LAYERSINPUT=0):
-        
-#         print('Lithology also requires ROCKDENSITYINIT and SOILBULKDENSITY (see material_parameters)')
-        
+        """
+        Sets the parameters defining the lithology. It also requires ROCKDENSITYINIT
+        and SOILBULKDENSITY (see material_parameters).
+
+        Parameters
+        ----------
+        OPT_READ_LAYFILE : int (default 0)
+            Start with an existing .lay file.
+        INPUT_LAY_FILE : str (default 'n/a')
+            .lay file.
+        OPT_READ_ETCHFILE : int (default 0)
+            Modify layers according to an Etch File. An Etch File specifies one
+            or more layers, with given properties, to be "etched in" to the current
+            topography and lithology.
+        ETCHFILE_NAME : str (default 'n/a')
+            Etch file.
+        OPT_SET_ERODY_FROM_FILE : int (default 0)
+            Set initial rock erodibility values at all depths based on values in a file.
+        ERODYFILE_NAME : str (default 'n/a')
+            Erodibility file.
+        OPT_NEW_LAYERSINPUT : int (default 0)
+            Hack: make layers input backwards compatible for simulations without
+            bulk density.
+
+        """
         self.parameters['OPT_READ_LAYFILE'] = OPT_READ_LAYFILE
         self.parameters['INPUT_LAY_FILE'] = INPUT_LAY_FILE
         self.parameters['OPT_READ_ETCHFILE'] = OPT_READ_ETCHFILE
@@ -518,20 +695,54 @@ class InputWriter(DataManager):
                    OPTLAYEROUTPUT=0,
                    OPT_NEW_LAYERSOUTPUT=0,
                    OPTINTERPLAYER=0):
-        
+        """
+        Sets the parameters defining the stratigraphic layers.
+
+        Parameters
+        ----------
+        OPTLAYEROUTPUT : int (default 0)
+            Option for output of layer data.
+        OPT_NEW_LAYERSOUTPUT : int (default 0)
+            Hack: make backward compatible for sims without bulk density.
+        OPTINTERPLAYER : int (default 0)
+            Option for layer interpolation when points are moved or added.
+
+        """
         self.parameters['OPTLAYEROUTPUT'] = OPTLAYEROUTPUT
         self.parameters['OPT_NEW_LAYERSOUTPUT'] = OPT_NEW_LAYERSOUTPUT
         self.parameters['OPTINTERPLAYER'] = OPTINTERPLAYER
         
     def set_stratigraphic_grid(self,
                                OPTSTRATGRID=0,
-                               XCORNER=0,
-                               YCORNER=0,
-                               GRIDDX=200,
-                               GR_WIDTH=10000,
-                               GR_LENGTH=10000,
-                               SG_MAXREGDEPTH=100):
-        
+                               XCORNER=0.,
+                               YCORNER=0.,
+                               GRIDDX=200.,
+                               GR_WIDTH=10000.,
+                               GR_LENGTH=10000.,
+                               SG_MAXREGDEPTH=100.):
+        """
+        Sets the parameters defining the regular stratigraphic grid.
+
+        Parameters
+        ----------
+        OPTSTRATGRID : int (default 0)
+            Option for tracking stratigraphy using subjacent raster grid (only
+            relevant when meandering and floodplain modules are activated; see
+            Clevis et al., 2006b).
+        XCORNER : float (default 0.)
+            Corner of stratigraphy grid in StratGrid module (m).
+        YCORNER : float (default 0.)
+            Corner of stratigraphy grid in StratGrid module (m).
+        GRIDDX : float (default 200.)
+            Grid spacing for StratGrid module (m).
+        GR_WIDTH : float (default 10000.)
+            Stratigraphy grid width in StratGrid module (m).
+        GR_LENGTH : float (default 10000.)
+            Stratigraphy grid length in StratGrid module (m).
+        SG_MAXREGDEPTH : float (default 100.)
+            Layer thickness in StratGrid module (m).
+
+        """
         self.parameters['OPTSTRATGRID'] = OPTSTRATGRID
         self.parameters['XCORNER'] = XCORNER
         self.parameters['YCORNER'] = YCORNER
@@ -543,9 +754,9 @@ class InputWriter(DataManager):
     def set_tectonics(self,
                       OPTNOUPLIFT=0,
                       UPTYPE=1,
-                      UPDUR=10000000,
+                      UPDUR=1e10,
                       UPRATE=0.001,
-                      FAULTPOS=10000,
+                      FAULTPOS=10000.,
                       SUBSRATE='n/a',
                       SLIPRATE='n/a',
                       SS_OPT_WRAP_BOUNDARIES='n/a',
@@ -561,23 +772,23 @@ class InputWriter(DataManager):
                       FOLDUPRATE='n/a',
                       FOLDPOSITION='n/a',
                       BLFALL_UPPER='n/a',
-                      BLDIVIDINGLINE=2000,
+                      BLDIVIDINGLINE=2000.,
                       FLATDEPTH='n/a',
                       RAMPDIP='n/a',
                       KINKDIP='n/a',
                       UPPERKINKDIP='n/a',
                       ACCEL_REL_UPTIME=0.5,
-                      VERTICAL_THROW=1100.0,
-                      FAULT_PIVOT_DISTANCE=15000,
+                      VERTICAL_THROW=1100.,
+                      FAULT_PIVOT_DISTANCE=15000.,
                       MINIMUM_UPRATE='n/a',
                       OPT_INCREASE_TO_FRONT=0,
                       DECAY_PARAM_UPLIFT='n/a',
                       NUMUPLIFTMAPS=0,
                       UPMAPFILENAME='n/a',
                       UPTIMEFILENAME='n/a',
-                      FRONT_PROP_RATE=1,
+                      FRONT_PROP_RATE=1.,
                       UPLIFT_FRONT_GRADIENT=0.5,
-                      STARTING_YCOORD=100000,
+                      STARTING_YCOORD=10000.,
                       BLOCKEDGEPOSX='n/a',
                       BLOCKWIDTHX='n/a',
                       BLOCKEDGEPOSY='n/a',
@@ -590,31 +801,125 @@ class InputWriter(DataManager):
                       BUMP_AMPLITUDE='n/a',
                       BUMP_WAVELENGTH='n/a',
                       OPT_INITIAL_BUMP=0):
-        ''' Set the parameters for tectonics
+        """
+        Sets the parameters defining the tectonics.
 
-        @param OPTNOUPLIFT: Option to turn off tectonics (default to false)
-        @param UPTYPE: Code for the type of uplift to be applied:
-                       0. None
-                       1. Spatially and temporally uniform uplift
-                       2. Uniform uplift at Y >= fault location, zero elsewhere
-                       3. Block uplift with strike-slip motion along given Y coord
-                       4. Propagating fold modeled w/ simple error function curve
-                       5. 2D cosine-based uplift-subsidence pattern
-                       6. Block, fault, and foreland sinusoidal fold
-                       7. Two-sided differential uplift
-                       8. Fault bend fold
-                       9. Back-tilting normal fault block
-                       10. Linear change in uplift rate
-                       11. Power law change in uplift rate in the y-direction
-                       12. Uplift rate maps in separate files
-                       13. Propagating horizontal front
-                       14. Baselevel fall at open boundaries
-                       15. Moving block
-                       16. Moving sinusoid
-                       17. Uplift with crustal thickening
-                       18. Uplift and whole-landscape tilting
-                       19. Migrating Gaussian bump
-        '''
+        Parameters
+        ----------
+        OPTNOUPLIFT : int (default 0)
+            Option to turn off tectonics (default to false).
+        UPTYPE : int (default 1)
+            Code for the type of uplift to be applied:
+            0 = none;
+            1 = spatially and temporally uniform uplift;
+            2 = uniform uplift at Y >= fault location, zero elsewhere;
+            3 = block uplift with strike-slip motion along given Y coord;
+            4 = propagating fold modeled w/ simple error function curve;
+            5 = 2D cosine-based uplift-subsidence pattern;
+            6 = block, fault, and foreland sinusoidal fold;
+            7 = two-sided differential uplift;
+            8 = fault bend fold;
+            9 = back-tilting normal fault block;
+            10 = linear change in uplift rate;
+            11 = power law change in uplift rate in the y-direction;
+            12 = uplift rate maps in separate files;
+            13 = propagating horizontal front;
+            14 = baselevel fall at open boundaries;
+            15 = moving block;
+            16 = moving sinusoid;
+            17 = uplift with crustal thickening;
+            18 = uplift and whole-landscape tilting;
+            19 = migrating Gaussian bump.
+        UPDUR : float (default 1e10)
+            Duration of uplift / baselevel change (yr).
+        UPRATE : float (default 0.001)
+            Rate parameter for uplift routines (usage differs among different
+            uplift functions) (m/yr).
+        FAULTPOS : float (default 10000.)
+            y location of a fault perpendicular to the x-axis (m).
+        SUBSRATE : float (default 'n/a')
+            Subsidence rate (used for some uplift functions) (m/yr).
+        SLIPRATE : float (default 'n/a')
+            Tectonic parameter: rate of strike-slip motion (option 3), dip-slip
+            motion (option 8) (m/yr).
+        SS_OPT_WRAP_BOUNDARIES : int (default 'n/a')
+        SS_BUFFER_WIDTH : float (default 'n/a')
+        FOLDPROPRATE : float (default 'n/a')
+            Uplift option 4: propagation rate of a fold (m/yr).
+        FOLDWAVELEN : float (default 'n/a')
+            Uplift options 4, 5, 6: fold wavelength (m).
+        TIGHTENINGRATE : float (default 'n/a')
+            Uplift option 5: rate at which fold tightens.
+        ANTICLINEXCOORD : float (default 'n/a')
+            Uplift option 5: xcoordinate of anticline crest (m).
+        ANTICLINEYCOORD : float (default 'n/a')
+            Uplift option 5: ycoordinate of anticline crest (m).
+        YFOLDINGSTART : float (default 'n/a')
+            Uplift option 5: starting time of fold deformation (yr).
+        UPSUBRATIO : float (default 'n/a')
+            Uplift option 5: uplift-subsidence ratio.
+        FOLDLATRATE : float (default 'n/a')
+            Uplift option 6: lateral propagation rate of fold.
+        FOLDUPRATE : float (default 'n/a')
+            Uplift option 6: uplift rate of fold axis (m/yr).
+        FOLDPOSITION : float (default 'n/a')
+            Uplift option 6: position coordinate for fold (m).
+        BLFALL_UPPER : float (default 'n/a')
+            Uplift option 7: rate of baselevel fall at upper (y=ymax) boundary (m/yr).
+        BLDIVIDINGLINE : float (default 2000.)
+            Uplift option 7: ycoordinate that separates the two zones of baselevel
+            fall. Open boundary nodes with y greater than this value are given the
+            "upper" rate (m).
+        FLATDEPTH : float (default 'n/a')
+            Uplift option 8: depth to flat portion of fault plane (m).
+        RAMPDIP : float (default 'n/a')
+            Uplift option 8: dip of fault ramp.
+        KINKDIP : float (default 'n/a')
+            Uplift option 8: dip of fault kink in fault-bend fold model.
+        UPPERKINKDIP : float (default 'n/a')
+        ACCEL_REL_UPTIME : float (default 0.5)
+            Uplift option 9: fraction of total time that fault motion has been accelerated.
+        VERTICAL_THROW : float (default 1100.)
+            Uplift option 9: total fault throw (m).
+        FAULT_PIVOT_DISTANCE : float (default 15000.)
+            Uplift option 9: distance from normal fault to pivot point (m).
+        MINIMUM_UPRATE : float (default 'n/a')
+            Uplift option 10: minimum uplift rate (m/yr).
+        OPT_INCREASE_TO_FRONT : int (default 0)
+            Uplift option 10: option for having uplift rate increase (rather than
+            decrease) toward y = 0.
+        DECAY_PARAM_UPLIFT : float (default 'n/a')
+            Uplift option 11: decay parameter for power-law uplift function.
+        NUMUPLIFTMAPS : int (default 0)
+            Uplift option 12: number of uplift rate maps to read from file.
+        UPMAPFILENAME : str (default 'n/a')
+            Uplift option 12: base name of files containing uplift rate fields.
+        UPTIMEFILENAME : str (default 'n/a')
+            Uplift option 12: name of file containing times corresponding to each
+            uplift rate map.
+        FRONT_PROP_RATE : float (default 1.)
+            Uplift option 13: rate of horizontal propagation of deformation front (m/yr).
+        UPLIFT_FRONT_GRADIENT : float (default 0.5)
+            Uplift option 13: this defines the azimuth of the uplift front. If
+            zero, the front is parallel to the x-axis. If positive, it angles
+            away from the open boundary (if there is one). The idea is that this
+            captures (crudely) the north-to-south propagation of wedge growth in Taiwan.
+        STARTING_YCOORD : float (default 10000.)
+            Uplift option 13: y coordinate at which propagating deformation front starts (m).
+        BLOCKEDGEPOSX : float (default 'n/a')
+        BLOCKWIDTHX : float (default 'n/a')
+        BLOCKEDGEPOSY : float (default 'n/a')
+        BLOCKWIDTHY : float (default 'n/a')
+        BLOCKMOVERATE : float (default 'n/a')
+        TILT_RATE : float (default 'n/a')
+        TILT_ORIENTATION : float (default 'n/a')
+        BUMP_MIGRATION_RATE : float (default 'n/a')
+        BUMP_INITIAL_POSITION : float (default 'n/a')
+        BUMP_AMPLITUDE : float (default 'n/a')
+        BUMP_WAVELENGTH : float (default 'n/a')
+        OPT_INITIAL_BUMP : int (default 0)
+
+        """
         self.parameters['OPTNOUPLIFT'] = OPTNOUPLIFT
         self.parameters['UPTYPE'] = UPTYPE
         self.parameters['UPDUR'] = UPDUR
@@ -667,8 +972,19 @@ class InputWriter(DataManager):
         
     def set_uniform_uplift(self,
                            UPRATE=0.001,
-                           UPDUR=10000000):
-        
+                           UPDUR=1e10):
+        """
+        Sets the parameters defining a uniform uplift.
+
+        Parameters
+        ----------
+        UPRATE : float (default 0.001)
+            Rate parameter for uplift routines (usage differs among different
+            uplift functions) (m/yr).
+        UPDUR : float (default 1e10)
+            Duration of uplift / baselevel change (yr).
+
+        """
         self.parameters['OPTNOUPLIFT'] = 0
         self.parameters['UPTYPE'] = 1
         self.parameters['UPRATE'] = UPRATE
@@ -677,9 +993,24 @@ class InputWriter(DataManager):
     def set_block_uplift(self,
                          FAULTPOS,
                          UPRATE=0.001,
-                         SUBSRATE=0,
-                         UPDUR=10000000):
-        
+                         SUBSRATE=0.,
+                         UPDUR=1e10):
+        """
+        Sets the parameters defining a block uplift.
+
+        Parameters
+        ----------
+        FAULTPOS : float
+            y location of a fault perpendicular to the x-axis (m).
+        UPRATE : float (default 0.001)
+            Rate parameter for uplift routines (usage differs among different
+            uplift functions) (m/yr).
+        SUBSRATE : float (default 0.)
+            Subsidence rate (used for some uplift functions) (m/yr).
+        UPDUR : float (default 1e10)
+            Duration of uplift / baselevel change (yr).
+
+        """
         self.parameters['OPTNOUPLIFT'] = 0
         self.parameters['UPTYPE'] = 2
         self.parameters['FAULTPOS'] = FAULTPOS
@@ -691,8 +1022,23 @@ class InputWriter(DataManager):
                         NUMUPLIFTMAPS,
                         UPMAPFILENAME,
                         UPTIMEFILENAME='n/a',
-                        UPDUR=10000000,):
-        
+                        UPDUR=1e10):
+        """
+        Sets the parameters defining uplift maps.
+
+        Parameters
+        ----------
+        NUMUPLIFTMAPS : int
+            Uplift option 12: number of uplift rate maps to read from file.
+        UPMAPFILENAME : str
+            Uplift option 12: base name of files containing uplift rate fields.
+        UPTIMEFILENAME : str (default 'n/a')
+            Uplift option 12: name of file containing times corresponding to each
+            uplift rate map.
+        UPDUR : float (default 1e10)
+            Duration of uplift / baselevel change (yr).
+
+        """
         self.parameters['OPTNOUPLIFT'] = 0
         self.parameters['UPTYPE'] = 12
         self.parameters['UPRATE'] = 0
@@ -705,9 +1051,29 @@ class InputWriter(DataManager):
                                          STARTING_YCOORD,
                                          UPRATE=0.001,
                                          FRONT_PROP_RATE=0.01,
-                                         UPLIFT_FRONT_GRADIENT=0,
-                                         UPDUR=10000000):
-        
+                                         UPLIFT_FRONT_GRADIENT=0.,
+                                         UPDUR=1e10):
+        """
+        Sets the parameters defining the tectonics.
+
+        Parameters
+        ----------
+        STARTING_YCOORD : float
+            Uplift option 13: y coordinate at which propagating deformation front starts (m).
+        UPRATE : float (default 0.001)
+            Rate parameter for uplift routines (usage differs among different
+            uplift functions) (m/yr).
+        FRONT_PROP_RATE : float (default 0.01)
+            Uplift option 13: rate of horizontal propagation of deformation front (m/yr).
+        UPLIFT_FRONT_GRADIENT : float (default 0.)
+            Uplift option 13: this defines the azimuth of the uplift front. If
+            zero, the front is parallel to the x-axis. If positive, it angles
+            away from the open boundary (if there is one). The idea is that this
+            captures (crudely) the north-to-south propagation of wedge growth in Taiwan.
+        UPDUR : float (default 1e10)
+            Duration of uplift / baselevel change (yr).
+
+        """
         self.parameters['OPTNOUPLIFT'] = 0
         self.parameters['UPTYPE'] = 13
         self.parameters['STARTING_YCOORD'] = STARTING_YCOORD
