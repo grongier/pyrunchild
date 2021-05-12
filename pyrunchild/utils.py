@@ -7,7 +7,6 @@ import os
 import re
 from glob import glob
 import textwrap
-from threading import Timer
 import numpy as np
 from scipy import stats, linalg
 from scipy.spatial import cKDTree
@@ -43,7 +42,6 @@ def divide_line(string,
     -------
     str
         The new string.
-
     """
     return start_str + join_str.join(textwrap.wrap(string, line_size)) + end_str
 
@@ -57,7 +55,6 @@ def rename_old_file(file_path):
     ----------
     file_path : str
         The path to the file.
-
     """
     if os.path.isfile(file_path) == True:
         new_file_path = file_path + '_old'
@@ -80,7 +77,6 @@ def sorted_alphanumeric(l):
     -------
     list
         The sorted list.
-
     """
     def convert(text):
         return int(text) if text.isdigit() else text
@@ -94,7 +90,7 @@ def sorted_alphanumeric(l):
 ################################################################################
 # Interpolation
 
-def griddata_idw(points, values, xi, nb_neighbors=8, p=2.):
+def griddata_idw(points, values, xi, n_neighbors=8, p=2.):
     """
     Interpolates unstructured D-dimensional data using the inverse distance
     weighted interpolation.
@@ -116,7 +112,6 @@ def griddata_idw(points, values, xi, nb_neighbors=8, p=2.):
     -------
     ndarray, shape (m, V)
         Interpolated values.
-
     """
     tree = cKDTree(points)
 
@@ -141,7 +136,6 @@ class RangeModel:
         Initial value of the range.
     step : int (default 1)
         Step between two values of the range.
-        
     """
     def __init__(self, start=0, step=1):
 
@@ -168,7 +162,6 @@ class BinaryModel:
     ----------
     model : scipy.stats' rv_continuous
         Model from which to draw the first value.
-        
     """
     def __init__(self, model):
         
@@ -202,7 +195,6 @@ class MixtureModel:
         Models from which to draw first values.
     weights : array-like, optional (default None)
         Weights of each sub-models to influence their selection.
-        
     """
     def __init__(self, submodels, weights=None):
         
@@ -238,7 +230,6 @@ class MemoryModel:
         Model from which to draw the values.
     call_memory : int (default 1)
         Number of times the same value is returned.
-        
     """
     def __init__(self, model, call_memory=1):
         
@@ -275,7 +266,6 @@ class DependencyModel:
         Model from which to draw the values.
     call_memory : int (default 1)
         Number of times the same value is returned.
-        
     """
     def __init__(self, model, call_memory=1):
         
@@ -325,7 +315,6 @@ class TwoGrainsModel:
         True if an inlet is used in CHILD, false otherwise.
     is_meandering : bool (default True)
         True if the meandering mode is used in CHILD, false otherwise.
-        
     """
     def __init__(self,
                  coarse_diameter,
@@ -419,7 +408,6 @@ class TimeSeriesConstraint:
         Interpolation mode of the time series in CHILD. 'interpolate' means
         linear variations between time steps, 'forward' means constant values
         between time steps.
-        
     """
     def __init__(self,
                  parameter,
@@ -483,7 +471,6 @@ class ConstrainedTimeSeries:
         If true, set CHILD's OPINTRVL parameter to the final time of the time
         series, which means that CHILD is creating output files only once, at
         the very end of the simulation.
-        
     """
     def __init__(self,
                  main_constraint,
@@ -742,7 +729,6 @@ def _build_sand_cmap(light_fraction_1,
     -------
     cmap
         The colormap.
-
     """
     mississippi_mud = (15/360, 0.29 + light_fraction_1*0.29, 0.14)
     rio_grande_mud = (22/360, 0.48 + light_fraction_2*0.48, 0.33)

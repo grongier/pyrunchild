@@ -9,7 +9,7 @@ import numpy as np
 from scipy import interpolate
 # from numba import jit
 
-from pyrunchild.utils import sorted_alphanumeric
+from .utils import sorted_alphanumeric
 
 
 ################################################################################
@@ -25,11 +25,8 @@ class DataManager:
         Directory to read and write files.
     base_name : str
         Base name of CHILD's files.
-        
     """
-    def __init__(self,
-                 base_directory,
-                 base_name):
+    def __init__(self, base_directory, base_name):
 
         self.base_directory = base_directory
         os.makedirs(self.base_directory, exist_ok=True)
@@ -88,9 +85,7 @@ class DataManager:
 
         return nodes, time_slices
         
-    def read_triangles(self,
-                       realization=None,
-                       return_array=True):
+    def read_triangles(self, realization=None):
         """
         Reads the .tri file created by a CHILD simulation.
         """
@@ -123,10 +118,7 @@ class DataManager:
 
         return triangles, time_slices
         
-    def read_output_file(self,
-                         file_type,
-                         realization=None,
-                         return_array=False):
+    def read_output_file(self, file_type, realization=None, return_array=False):
         """
         Reads the any output file created by a CHILD simulation.
         """
@@ -164,10 +156,7 @@ class DataManager:
         else:
             return output, time_slices
         
-    def read_file(self,
-                  file_name,
-                  is_size=False,
-                  return_array=True):
+    def read_file(self, file_name, is_size=False, return_array=True):
         """
         Reads any file.
         """
@@ -382,10 +371,7 @@ class DataManager:
                 
         return lithology
 
-    def extract_boundary_map(self,
-                             boundary=0,
-                             file_nb=None,
-                             realization=None):
+    def extract_boundary_map(self, boundary=0, file_nb=None, realization=None):
         """
         Extracts a layer boundary from a .litho* file created by a CHILD simulation.
         """
@@ -468,6 +454,7 @@ class DataManager:
                         else:
                             # Basement
                             regular_cell_arrays[0, k, j, i] = 2
+                            regular_cell_arrays[1:, k, j, i] = lithology[n][l - 1]
                     k -= 1
                     
         return regular_cell_arrays
@@ -632,11 +619,13 @@ class DataManager:
             for line in file:
                 line = [float(i) for i in line.rstrip('\n').split(' ')]
                 lines.append(line)
-            preservation_potential = np.full((len(lines), len(lines[-1])), np.nan)
-            for i in range(len(lines)):
-                preservation_potential[i, :len(lines[i])] = lines[i]
-                
-        return preservation_potential
+            if len(lines) > 0:
+                preservation_potential = np.full((len(lines), len(lines[-1])), np.nan)
+                for i in range(len(lines)):
+                    preservation_potential[i, :len(lines[i])] = lines[i]
+                return preservation_potential
+            else:
+                return None
 
     def read_preservation_potential(self, realization=None):
         """
@@ -654,7 +643,10 @@ class DataManager:
         path = self.base_name + file_suffix + '.presSubsurface'
         preservation_potential['subsurface'] = DataManager._read_preservation_potential(path)
         path = self.base_name + file_suffix + '.presSubsurface2'
-        preservation_potential['subsurface2'] = np.loadtxt(path, skiprows=2)
+        try:
+            preservation_potential['subsurface2'] = np.loadtxt(path, skiprows=2)
+        except:
+            preservation_potential['subsurface2'] = None
 
         return preservation_potential
 
@@ -716,10 +708,7 @@ class DataManager:
 
         self.write_file(uplift_map, file_name + padding + str(file_nb))
         
-    def write_uplift_maps(self,
-                          uplift_maps,
-                          uplift_times,
-                          file_name='upliftmap'):
+    def write_uplift_maps(self, uplift_maps, uplift_times, file_name='upliftmap'):
         """
         Writes several uplifts map into a file following CHILD format.
         """
@@ -729,6 +718,6 @@ class DataManager:
                                   file_nb=i + 1)
             
         with open(os.path.join(self.base_directory,
-                               filename + 'times'), 'w') as file:
+                               file_name + 'times'), 'w') as file:
             for time in uplift_times:
                 file.write(str(time) + '\n')

@@ -40,7 +40,6 @@ class Child(InputWriter):
         actually required in a simulation.
     seed : int (default 42)
         Seed used for the random draw of parameter values, if required.
-        
     """
     def __init__(self,
                  base_directory,
@@ -68,7 +67,7 @@ class Child(InputWriter):
             print_log=False,
             write_log=False,
             timeout=None,
-            update_seed=True,
+            update_seed=False,
             resolve_parameters=False,
             max_attempts=1,
             save_previous_input_file=True,
@@ -90,11 +89,11 @@ class Child(InputWriter):
         write_log : bool (default False)
             If true, writes the log into a file.
         timeout : float, optional (default None)
-            Maximum run time for the simulation.
-        update_seed : bool (default True)
+            Maximum run time for the simulation (in second).
+        update_seed : bool (default False)
             If true and the simulation fails or times out, try again with a
             different seed in CHILD.
-        resolve_parameters : bool (default True)
+        resolve_parameters : bool (default False)
             If true and the simulation fails or times out, try again with a
             different parameter values. Only works if some of the parameters
             are randomly drawn.
@@ -113,7 +112,6 @@ class Child(InputWriter):
         -------
         dict
             The parameter values, only if return_parameter_values is true.
-            
         """
         random_state = np.random.RandomState(self.seed + realization)
         if input_name is None:
@@ -206,7 +204,7 @@ class Child(InputWriter):
                   print_log=False,
                   write_log=False,
                   timeout=None,
-                  update_seed=True,
+                  update_seed=False,
                   resolve_parameters=False,
                   save_previous_input_file=True,
                   extensions_to_remove=None,
@@ -226,11 +224,11 @@ class Child(InputWriter):
         write_log : bool (default False)
             If true, writes the log into a file.
         timeout : float, optional (default None)
-            Maximum run time for the simulation.
-        update_seed : bool (default True)
+            Maximum run time for the simulation (in second).
+        update_seed : bool (default False)
             If true and the simulation fails or times out, try again with a
             different seed in CHILD.
-        resolve_parameters : bool (default True)
+        resolve_parameters : bool (default False)
             If true and the simulation fails or times out, try again with a
             different parameter values. Only works if some of the parameters
             are randomly drawn.
@@ -242,7 +240,6 @@ class Child(InputWriter):
         max_attempts : int (default 1)
             Maximum number of other attempts if the simulation fails or times
             out.
-            
         """
         if n_jobs == -1:
             try:
@@ -287,7 +284,6 @@ class Child(InputWriter):
             If true, runs CHILD in silent mode.
         write_log : bool (default False)
             If true, writes the log into a file.
-            
         """
         if input_name is None:
             if self.base_names[realization] is None:
@@ -397,7 +393,6 @@ class Child(InputWriter):
         -------
         nodes : ndarray, shape (n, 5)
             The nodes.
-            
         """
         node_writer = InputWriter(self.base_directory, OUTFILENAME)
         node_writer.set_run_control(RUNTIME=0,

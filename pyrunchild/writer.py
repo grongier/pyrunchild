@@ -5,13 +5,14 @@
 
 import os
 from collections import OrderedDict
+import subprocess
 import numpy as np
 from scipy import stats
 
-from pyrunchild.manager import DataManager
-from pyrunchild.utils import divide_line, rename_old_file
-from pyrunchild.utils import (RangeModel, BinaryModel, MixtureModel, MemoryModel,
-                              DependencyModel, TwoGrainsModel, ConstrainedTimeSeries)
+from .manager import DataManager
+from .utils import divide_line, rename_old_file
+from .utils import (RangeModel, BinaryModel, MixtureModel, MemoryModel,
+                    DependencyModel, TwoGrainsModel, ConstrainedTimeSeries)
 
 
 ################################################################################
@@ -39,7 +40,6 @@ class InputWriter(DataManager):
         actually required in a simulation.
     seed : int (default 42)
         Seed used for the random draw of parameter values, if required.
-        
     """
     def __init__(self,
                  base_directory,
@@ -416,7 +416,6 @@ class InputWriter(DataManager):
         FSEED : int (default 42)
             Seed for random number generation (used in the vegetation module).
             Must be an integer.
-            
         """
         if OUTFILENAME is None:
             OUTFILENAME = self.out_file_name
@@ -523,7 +522,6 @@ class InputWriter(DataManager):
         MESHADAPTAREA_MAXVAREA : float (default 'n/a')
             For dynamic re-meshing based on drainagearea: maximum Voronoi area
             for nodes meeting the minimum area criterion.
-            
         """
         self.parameters['OPTREADINPUT'] = OPTREADINPUT
         self.parameters['OPTINITMESHDENS'] = OPTINITMESHDENS
@@ -610,7 +608,6 @@ class InputWriter(DataManager):
             For runs with an inlet: if option for calculating rather than specifying
             sediment discharge is chosen, this is the slope that is used to calculate
             sediment discharge.
-
         """
         self.parameters['TYP_BOUND'] = TYP_BOUND
         self.parameters['NUMBER_OUTLETS'] = NUMBER_OUTLETS
@@ -644,7 +641,6 @@ class InputWriter(DataManager):
             Starting thickness of regolith layer (m).
         MAXREGDEPTH : float (default 100.)
             Depth of active layer, and maximum thickness of a deposited layer (m).
-
         """
         self.parameters['BEDROCKDEPTH'] = BEDROCKDEPTH
         self.parameters['REGINIT'] = REGINIT
@@ -681,7 +677,6 @@ class InputWriter(DataManager):
         OPT_NEW_LAYERSINPUT : int (default 0)
             Hack: make layers input backwards compatible for simulations without
             bulk density.
-
         """
         self.parameters['OPT_READ_LAYFILE'] = OPT_READ_LAYFILE
         self.parameters['INPUT_LAY_FILE'] = INPUT_LAY_FILE
@@ -706,7 +701,6 @@ class InputWriter(DataManager):
             Hack: make backward compatible for sims without bulk density.
         OPTINTERPLAYER : int (default 0)
             Option for layer interpolation when points are moved or added.
-
         """
         self.parameters['OPTLAYEROUTPUT'] = OPTLAYEROUTPUT
         self.parameters['OPT_NEW_LAYERSOUTPUT'] = OPT_NEW_LAYERSOUTPUT
@@ -741,7 +735,6 @@ class InputWriter(DataManager):
             Stratigraphy grid length in StratGrid module (m).
         SG_MAXREGDEPTH : float (default 100.)
             Layer thickness in StratGrid module (m).
-
         """
         self.parameters['OPTSTRATGRID'] = OPTSTRATGRID
         self.parameters['XCORNER'] = XCORNER
@@ -918,7 +911,6 @@ class InputWriter(DataManager):
         BUMP_AMPLITUDE : float (default 'n/a')
         BUMP_WAVELENGTH : float (default 'n/a')
         OPT_INITIAL_BUMP : int (default 0)
-
         """
         self.parameters['OPTNOUPLIFT'] = OPTNOUPLIFT
         self.parameters['UPTYPE'] = UPTYPE
@@ -983,7 +975,6 @@ class InputWriter(DataManager):
             uplift functions) (m/yr).
         UPDUR : float (default 1e10)
             Duration of uplift / baselevel change (yr).
-
         """
         self.parameters['OPTNOUPLIFT'] = 0
         self.parameters['UPTYPE'] = 1
@@ -1009,7 +1000,6 @@ class InputWriter(DataManager):
             Subsidence rate (used for some uplift functions) (m/yr).
         UPDUR : float (default 1e10)
             Duration of uplift / baselevel change (yr).
-
         """
         self.parameters['OPTNOUPLIFT'] = 0
         self.parameters['UPTYPE'] = 2
@@ -1037,7 +1027,6 @@ class InputWriter(DataManager):
             uplift rate map.
         UPDUR : float (default 1e10)
             Duration of uplift / baselevel change (yr).
-
         """
         self.parameters['OPTNOUPLIFT'] = 0
         self.parameters['UPTYPE'] = 12
@@ -1072,7 +1061,6 @@ class InputWriter(DataManager):
             captures (crudely) the north-to-south propagation of wedge growth in Taiwan.
         UPDUR : float (default 1e10)
             Duration of uplift / baselevel change (yr).
-
         """
         self.parameters['OPTNOUPLIFT'] = 0
         self.parameters['UPTYPE'] = 13
@@ -1126,46 +1114,64 @@ class InputWriter(DataManager):
 
     def set_hydraulic_geometry(self,
                                CHAN_GEOM_MODEL=1,
-                               HYDR_WID_COEFF_DS=10.0,
+                               HYDR_WID_COEFF_DS=10.,
                                HYDR_WID_EXP_DS=0.5,
                                HYDR_WID_EXP_STN=0.5,
-                               HYDR_DEP_COEFF_DS=1.0,
-                               HYDR_DEP_EXP_DS=0,
-                               HYDR_DEP_EXP_STN=0,
+                               HYDR_DEP_COEFF_DS=1.,
+                               HYDR_DEP_EXP_DS=0.,
+                               HYDR_DEP_EXP_STN=0.,
                                HYDR_ROUGH_COEFF_DS=0.03,
-                               HYDR_ROUGH_EXP_DS=0,
-                               HYDR_ROUGH_EXP_STN=0,
-                               HYDR_SLOPE_EXP=0,
+                               HYDR_ROUGH_EXP_DS=0.,
+                               HYDR_ROUGH_EXP_STN=0.,
+                               HYDR_SLOPE_EXP=0.,
                                THETAC=0.045,
                                SHEAR_RATIO=1.1,
-                               BANK_ROUGH_COEFF=15.0,
-                               BANK_ROUGH_EXP=0.80,
-                               BANKFULLEVENT=10):
-        ''' Set the hydraulic geometry
+                               BANK_ROUGH_COEFF=15.,
+                               BANK_ROUGH_EXP=0.8,
+                               BANKFULLEVENT=10.):
+        """
+        Sets the hydraulic geometry
 
-        @param CHAN_GEOM_MODEL: Type of channel geometry model to be used:
-                                0. standard empirical hydraulic geometry
-                                1. Regime theory (empirical power-law scaling) [experimental]
-                                2. Parker-Paola self-formed channel theory [experimental]
-                                3. Finnegan slope-dependent channel width model [experimental]
-        @param HYDR_WID_COEFF_DS: Coefficient in bankfull width-discharge relation
-        @param HYDR_WID_EXP_DS: Exponent in bankfull width-discharge relatio
-        @param HYDR_WID_EXP_STN: Exponent in at-a-station width-discharge relation
-        @param HYDR_DEP_COEFF_DS: Coefficient in bankfull depth-discharge relation
-        @param HYDR_DEP_EXP_DS: Exponent in bankfull depth-discharge relation
-        @param HYDR_DEP_EXP_STN: Exponent in at-a-station depth-discharge relation
-        @param HYDR_ROUGH_COEFF_DS: Coefficient in bankfull roughness-discharge relation
-        @param HYDR_ROUGH_EXP_DS: Exponent in bankfull roughness-discharge relation
-        @param HYDR_ROUGH_EXP_STN: Exponent in at-a-station roughness-discharge relation
-        @param HYDR_SLOPE_EXP:
-        @param THETAC: For "Parker" channel geometry option: critical Shields stress
-        @param SHEAR_RATIO: For "Parker" channel geometry option: ratio of 
-                            actual to threshold shear stress
-        @param BANK_ROUGH_COEFF: Coefficient in bank roughness-discharge relation
-        @param BANK_ROUGH_EXP: Exponent in bank roughness-discharge relation
-        @param BANKFULLEVENT: Runoff rate associated with bankfull flood event.
-                              Used to compute hydraulic geometry
-        '''
+        Parameters
+        ----------
+        CHAN_GEOM_MODEL: int (default 1)
+            Type of channel geometry model to be used:
+            0 = standard empirical hydraulic geometry;
+            1 = Regime theory (empirical power-law scaling) [experimental];
+            2 = Parker-Paola self-formed channel theory [experimental];
+            3 = Finnegan slope-dependent channel width model [experimental].
+        HYDR_WID_COEFF_DS: float (default 10.)
+            Coefficient in bankfull width-discharge relation.
+        HYDR_WID_EXP_DS: float (default 0.5)
+            Exponent in bankfull width-discharge relation.
+        HYDR_WID_EXP_STN: float (default 0.5)
+            Exponent in at-a-station width-discharge relation.
+        HYDR_DEP_COEFF_DS: float (default 1.)
+            Coefficient in bankfull depth-discharge relation.
+        HYDR_DEP_EXP_DS: float (default 0.)
+            Exponent in bankfull depth-discharge relation.
+        HYDR_DEP_EXP_STN: float (default 0.)
+            Exponent in at-a-station depth-discharge relation.
+        HYDR_ROUGH_COEFF_DS: float (default 0.03)
+            Coefficient in bankfull roughness-discharge relation.
+        HYDR_ROUGH_EXP_DS: float (default 0.)
+            Exponent in bankfull roughness-discharge relation.
+        HYDR_ROUGH_EXP_STN: float (default 0.)
+            Exponent in at-a-station roughness-discharge relation.
+        HYDR_SLOPE_EXP: float (default 0.)
+        THETAC: float (default 0.045)
+            For "Parker" channel geometry option: critical Shields stress.
+        SHEAR_RATIO: float (default 1.1)
+            For "Parker" channel geometry option: ratio of actual to threshold
+            shear stress.
+        BANK_ROUGH_COEFF: float (default 15.)
+            Coefficient in bank roughness-discharge relation
+        BANK_ROUGH_EXP: float (default 0.8)
+            Exponent in bank roughness-discharge relation
+        BANKFULLEVENT: float (default 10.)
+            Runoff rate associated with bankfull flood event. Used to compute
+            hydraulic geometry.
+        """
         self.parameters['CHAN_GEOM_MODEL'] = CHAN_GEOM_MODEL
         self.parameters['HYDR_WID_COEFF_DS'] = HYDR_WID_COEFF_DS
         self.parameters['HYDR_WID_EXP_DS'] = HYDR_WID_EXP_DS
@@ -1645,7 +1651,11 @@ class InputWriter(DataManager):
         
         if parameter_name is None:
             parameter_name = parameter
-        input_file.write(parameter_name + ': ' + self.parameter_descriptions[parameter] + '\n')
+        if parameter in self.parameter_descriptions:
+            parameter_name += ': ' + self.parameter_descriptions[parameter] + '\n'
+        else:
+            parameter_name += ':\n'
+        input_file.write(parameter_name)
         input_file.write(str(value) + '\n')
         
     def write_header(self, input_file, outfile_name, description, line_size):
