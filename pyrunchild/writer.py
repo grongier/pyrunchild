@@ -218,14 +218,14 @@ class InputWriter(DataManager):
         parameter_descriptions['ST_PMEAN'] = '(m/yr) Mean storm rainfall intensity (16.4 m/yr = Atlanta, GA)'
         parameter_descriptions['ST_STDUR'] = '(yr) Mean storm duration (Denver July = 0.00057yrs = 5 hrs)'
         parameter_descriptions['ST_ISTDUR'] = '(yr) Mean time between storms (Denver July = 0.01yr = 88hrs)'
-        parameter_descriptions['ST_OPTSINVAR'] = 'option for sinusoidal variations'
-        parameter_descriptions['OPTSINVARINFILT'] = 'Option for sinusoidal variations through time in soil in- filtration capacity'
+        parameter_descriptions['ST_OPTSINVAR'] = 'Option for sinusoidal variations'
+        parameter_descriptions['OPTSINVARINFILT'] = 'Option for sinusoidal variations through time in soil infiltration capacity'
         # Runoff and infiltration
         parameter_descriptions['FLOWGEN'] = '''Runoff generation option: 0. Hortonian (uniform infilt-excess runoff); 1. Saturated flow 1 (sat-excess runoff w/ return flow); 2. Saturated flow 2 (sat-excess runoff w/o return flow); 3. Constant soil store ("bucket"-type flow generation); 4. 2D kinematic wave (2D steady kinematic wave multi-flow); 5. Hydrograph peak method; 6 Subsurface 2D kinematic wave (kinematic wave with Darcy's Law)'''
         parameter_descriptions['TRANSMISSIVITY'] = '(m2/yr) For subsurface flow options: soil hydraulic transmissivity.'
         parameter_descriptions['OPTVAR_TRANSMISSIVITY'] = ''
         parameter_descriptions['INFILTRATION'] = '(Ic, m/yr) Soil infiltration capacity'
-        parameter_descriptions['OPTSINVARINFILT'] = ''
+        parameter_descriptions['OPTSINVARINFILT'] = 'Option for sinusoidal variations through time in soil infiltration capacity'
         parameter_descriptions['PERIOD_INFILT'] = '(yr) Period for sinusoidal variations in soil infiltration capacity'
         parameter_descriptions['MAXICMEAN'] = 'Maximum value of sinusoidally varying soil infiltration capacity'
         parameter_descriptions['SOILSTORE'] = '''(m) For "bucket" hydrology sub-model: soil water storage capacity'''
@@ -271,7 +271,7 @@ class InputWriter(DataManager):
         parameter_descriptions['REGPROPORTIONi'] = 'Initial volumetric proportion of size i in regolith layers. Must specify one value for each grain size class. The range is zero to one'
         parameter_descriptions['GRAINDIAMi'] = '(Di, m) Diameter of grain size class i. There must be a value corresponding to each grain-size class used in the run. For example, a run with two grain-size classes must have GRAINDIAM1 and GRAINDIAM2'
         parameter_descriptions['HIDINGEXP'] = 'Exponent in equation for correcting critical shear stress to account for protrusion and hiding when multiple grain-size fractions are present on the bed'
-        parameter_descriptions['GRAINDIAM0'] = 'representative d50 grain size (if NUMGRNSIZE=1) [m]'  
+        parameter_descriptions['GRAINDIAM0'] = 'Representative d50 grain size (if NUMGRNSIZE=1) [m]'  
         # Fluvial transport
         parameter_descriptions['OPTNOFLUVIAL'] = 'Option to turn off fluvial processes (default to false)'
         parameter_descriptions['DETACHMENT_LAW'] = 'Code for detachment-capacity law to be applied: 0 = power law, form 1; 1 = power law, form 2; 2 = almost parabolic law; 3 = generalized f(Qs) detachment-rule; 4 = dummy law for no fluvial erosion'
@@ -306,36 +306,36 @@ class InputWriter(DataManager):
         parameter_descriptions['DIFFUSIONTHRESHOLD'] = 'When this parameter is greater than zero, it is the drainage area above which slope-dependent (“diffusive”) creep transport no longer takes place. Designed for use with sediment-flux-dependent transport functions; see Gasparini et al. (2007)'
         parameter_descriptions['OPT_NONLINEAR_DIFFUSION'] = 'Option for nonlinear diffusion model of soil creep'
         parameter_descriptions['OPT_DEPTH_DEPENDENT_DIFFUSION'] = 'Option for depth dependent creep transport'
-        parameter_descriptions['DIFFDEPTHSCALE'] = 'depth scale for depth-dependent diffusion'
+        parameter_descriptions['DIFFDEPTHSCALE'] = 'Depth scale for depth-dependent diffusion'
         parameter_descriptions['CRITICAL_SLOPE'] = 'Threshold slope gradient for nonlinear creep law'
         # Landsliding
         parameter_descriptions['OPT_LANDSLIDES'] = 'Option for landsliding'
         parameter_descriptions['OPT_3D_LANDSLIDES'] = 'Option for determining which landslide function to use'
-        parameter_descriptions['FRICSLOPE'] = 'tangent of angle of repose for soil (unitless)'
-        parameter_descriptions['DF_RUNOUT_RULE'] = 'set runout rules'
-        parameter_descriptions['DF_SCOUR_RULE'] = 'set scour rules'
-        parameter_descriptions['DF_DEPOSITION_RULE'] = 'set deposition rules'
+        parameter_descriptions['FRICSLOPE'] = 'Tangent of angle of repose for soil (unitless)'
+        parameter_descriptions['DF_RUNOUT_RULE'] = 'Set runout rules'
+        parameter_descriptions['DF_SCOUR_RULE'] = 'Set scour rules'
+        parameter_descriptions['DF_DEPOSITION_RULE'] = 'Set deposition rules'
         # Eolian
-        parameter_descriptions['OPTLOESSDEP'] = 'space-time uniform surface accumulation of sediment (loess)'
+        parameter_descriptions['OPTLOESSDEP'] = 'Space-time uniform surface accumulation of sediment (loess)'
         parameter_descriptions['LOESS_DEP_RATE'] = '(m/yr) Rate of accumulation of aeolian sediment across the landscape'
         # Chemical and physical weathering
-        parameter_descriptions['CHEM_WEATHERING_LAW'] = 'possible values 0-1: 0 = None; 1 = Dissolution'
-        parameter_descriptions['MAXDISSOLUTIONRATE'] = 'maximum dissolution rate (kg/m3/yr)'
-        parameter_descriptions['CHEMDEPTH'] = 'depth scale for dissolution (m)'
-        parameter_descriptions['PRODUCTION_LAW'] = 'possible values 0-2: 0 = None; 1 = exponential law; 2 = exp. with density dep.'
-        parameter_descriptions['SOILPRODRATE'] = 'uniform and constant soil production rate for zero soil depth for exponential law (m/yr)'
-        parameter_descriptions['SOILPRODRATEINTERCEPT'] = 'density-dependent soil production rate intercept (m/yr)'
-        parameter_descriptions['SOILPRODRATESLOPE'] = 'density-dependent soil production rate slope ( (m/yr)/(kg/m3) )'
-        parameter_descriptions['SOILPRODDEPTH'] = 'depth scale for soil production rate (m)'
+        parameter_descriptions['CHEM_WEATHERING_LAW'] = 'Possible values 0-1: 0 = None; 1 = Dissolution'
+        parameter_descriptions['MAXDISSOLUTIONRATE'] = 'Maximum dissolution rate (kg/m3/yr)'
+        parameter_descriptions['CHEMDEPTH'] = 'Depth scale for dissolution (m)'
+        parameter_descriptions['PRODUCTION_LAW'] = 'Possible values 0-2: 0 = None; 1 = exponential law; 2 = exp. with density dep.'
+        parameter_descriptions['SOILPRODRATE'] = 'Uniform and constant soil production rate for zero soil depth for exponential law (m/yr)'
+        parameter_descriptions['SOILPRODRATEINTERCEPT'] = 'Density-dependent soil production rate intercept (m/yr)'
+        parameter_descriptions['SOILPRODRATESLOPE'] = 'Density-dependent soil production rate slope ( (m/yr)/(kg/m3) )'
+        parameter_descriptions['SOILPRODDEPTH'] = 'Depth scale for soil production rate (m)'
         # Vegetation
         parameter_descriptions['OPTVEG'] = 'Option for dynamic vegetation layer (see Collins et al., 2004)'
-        parameter_descriptions['OPTGRASS_SIMPLE'] = 'option for simple grass'
+        parameter_descriptions['OPTGRASS_SIMPLE'] = 'Option for simple grass'
         parameter_descriptions['VEG_KVD'] = 'Vegetation erosion coefficient (dims LT/M)'
         parameter_descriptions['VEG_TV'] = 'Vegetation regrowth time scale (years)'
         parameter_descriptions['TAUC'] = 'Erosion threshold on bare soil'
         parameter_descriptions['VEG_TAUCVEG'] = 'Erosion threshold under 100% cover'
         # Forest
-        parameter_descriptions['OPTFOREST'] = 'option for basic forest evolution'
+        parameter_descriptions['OPTFOREST'] = 'Option for basic forest evolution'
         parameter_descriptions['OPTFOREST'] = ''
         parameter_descriptions['ROOTDECAY_K'] = ''
         parameter_descriptions['ROOTDECAY_N'] = ''
@@ -360,14 +360,14 @@ class InputWriter(DataManager):
         parameter_descriptions['WOODDECAY_K'] = ''
         parameter_descriptions['INITSTANDAGE'] = ''
         # Fire
-        parameter_descriptions['OPTFIRE'] = 'option for random fires assuming an exponential distribution of time to the next fire'
+        parameter_descriptions['OPTFIRE'] = 'Option for random fires assuming an exponential distribution of time to the next fire'
         parameter_descriptions['IFRDUR'] = 'Mean time between fires'
-        parameter_descriptions['OPTRANDOMFIRES'] = 'random fires'
+        parameter_descriptions['OPTRANDOMFIRES'] = 'Random fires'
         # Various options
         parameter_descriptions['OPTTSOUTPUT'] = 'Option for output of quantities at each storm (time step)'
-        parameter_descriptions['TSOPINTRVL'] = 'not currently operational'
+        parameter_descriptions['TSOPINTRVL'] = 'Not currently operational'
         parameter_descriptions['SURFER'] = 'Option for output in a Surfer-compatible data format'
-        parameter_descriptions['OPTEXPOSURETIME'] = 'option for tracking surface-layer exposure ages'
+        parameter_descriptions['OPTEXPOSURETIME'] = 'Option for tracking surface-layer exposure ages'
         parameter_descriptions['OPTFOLDDENS'] = 'Option for mesh densification around a growing fold'
         parameter_descriptions['OPT_TRACK_WATER_SED_TIMESERIES'] = 'Option to record timeseries Q and Qs'
         parameter_descriptions['OPT_FREEZE_ELEVATIONS'] = ''
@@ -1077,7 +1077,23 @@ class InputWriter(DataManager):
                      ST_ISTDUR=0.,
                      ST_OPTSINVAR=0,
                      OPTSINVARINFILT=0):
-        
+        """
+        Sets rainfall.
+
+        OPTVAR : int (default 0)
+            Option for random rainfall variation.
+        ST_PMEAN : float (default 10.)
+            Mean storm rainfall intensity (m/yr) (16.4 m/yr = Atlanta, GA).
+        ST_STDUR : float (default 1.)
+            Mean storm duration (yr) (Denver July = 0.00057yrs = 5 hrs).
+        ST_ISTDUR : float (default 0.)
+            Mean time between storms (yr) (Denver July = 0.01yr = 88hrs).
+        ST_OPTSINVAR : int (default 0)
+            Option for sinusoidal variations.
+        OPTSINVARINFILT : int (default 0)
+            Option for sinusoidal variations through time in soil infiltration
+            capacity.
+        """
         self.parameters['OPTVAR'] = OPTVAR
         self.parameters['ST_PMEAN'] = ST_PMEAN
         self.parameters['ST_STDUR'] = ST_STDUR
@@ -1089,16 +1105,55 @@ class InputWriter(DataManager):
                    FLOWGEN=0,
                    TRANSMISSIVITY='n/a',
                    OPTVAR_TRANSMISSIVITY=0,
-                   INFILTRATION=0,
+                   INFILTRATION=0.,
                    OPTSINVARINFILT=0,
-                   PERIOD_INFILT=0,
-                   MAXICMEAN=0,
-                   SOILSTORE=0,
-                   KINWAVE_HQEXP=1,
-                   FLOWVELOCITY=31536000,
-                   HYDROSHAPEFAC=1,
+                   PERIOD_INFILT=0.,
+                   MAXICMEAN=0.,
+                   SOILSTORE=0.,
+                   KINWAVE_HQEXP=1.,
+                   FLOWVELOCITY=31536000.,
+                   HYDROSHAPEFAC=1.,
                    LAKEFILL=1):
+        """
+        Sets runoff.
 
+        FLOWGEN : int (default 0)
+            Runoff generation option:
+            0 = Hortonian (uniform infilt-excess runoff);
+            1 = Saturated flow 1 (sat-excess runoff w/ return flow);
+            2 = Saturated flow 2 (sat-excess runoff w/o return flow);
+            3 = Constant soil store ("bucket"-type flow generation);
+            4 = 2D kinematic wave (2D steady kinematic wave multi-flow);
+            5 = Hydrograph peak method;
+            6 = Subsurface 2D kinematic wave (kinematic wave with Darcy's Law).
+        TRANSMISSIVITY : float (default n/a)
+            For subsurface flow options: soil hydraulic transmissivity (m2/yr).
+        OPTVAR_TRANSMISSIVITY : int (default 0)
+        INFILTRATION : float (default 0.)
+            Soil infiltration capacity (Ic, m/yr).
+        OPTSINVARINFILT : int (default 0)
+            Option for sinusoidal variations through time in soil infiltration
+            capacity.
+        PERIOD_INFILT : float (default 0.)
+            Period for sinusoidal variations in soil infiltration capacity (yr).
+        MAXICMEAN : float (default 0.)
+            Maximum value of sinusoidally varying soil infiltration capacity.
+        SOILSTORE : float (default 0.)
+            For "bucket" hydrology sub-model: soil water storage capacity (m).
+        KINWAVE_HQEXP : float (default 1.)
+            For kinematic wave water-routing module: exponent on depth-discharge
+            relationship.
+        FLOWVELOCITY : float (default 31536000.)
+            For peak hydrograph method of flow calculation: speed of channel flow
+            (used to compute travel time; see Solyom and Tucker, 2004).
+        HYDROSHAPEFAC : float (default 1.)
+            For hydrograph peak flow-calculation method: hydrograph shape factor
+            (see Solyom and Tucker, 2004).
+        LAKEFILL : int (default 1)
+            Option for computing inundated area and drainage pathways in closed
+            depressions (see Tucker et al.,  2001b). If not selected, any water
+            entering a closed depression is assumed to evaporate.
+        """
         self.parameters['FLOWGEN'] = FLOWGEN
         self.parameters['TRANSMISSIVITY'] = TRANSMISSIVITY
         self.parameters['OPTVAR_TRANSMISSIVITY'] = OPTVAR_TRANSMISSIVITY
@@ -1130,45 +1185,45 @@ class InputWriter(DataManager):
                                BANK_ROUGH_EXP=0.8,
                                BANKFULLEVENT=10.):
         """
-        Sets the hydraulic geometry
+        Sets the hydraulic geometry.
 
         Parameters
         ----------
-        CHAN_GEOM_MODEL: int (default 1)
+        CHAN_GEOM_MODEL : int (default 1)
             Type of channel geometry model to be used:
             0 = standard empirical hydraulic geometry;
             1 = Regime theory (empirical power-law scaling) [experimental];
             2 = Parker-Paola self-formed channel theory [experimental];
             3 = Finnegan slope-dependent channel width model [experimental].
-        HYDR_WID_COEFF_DS: float (default 10.)
+        HYDR_WID_COEFF_DS : float (default 10.)
             Coefficient in bankfull width-discharge relation.
-        HYDR_WID_EXP_DS: float (default 0.5)
+        HYDR_WID_EXP_DS : float (default 0.5)
             Exponent in bankfull width-discharge relation.
-        HYDR_WID_EXP_STN: float (default 0.5)
+        HYDR_WID_EXP_STN : float (default 0.5)
             Exponent in at-a-station width-discharge relation.
-        HYDR_DEP_COEFF_DS: float (default 1.)
+        HYDR_DEP_COEFF_DS : float (default 1.)
             Coefficient in bankfull depth-discharge relation.
-        HYDR_DEP_EXP_DS: float (default 0.)
+        HYDR_DEP_EXP_DS : float (default 0.)
             Exponent in bankfull depth-discharge relation.
-        HYDR_DEP_EXP_STN: float (default 0.)
+        HYDR_DEP_EXP_STN : float (default 0.)
             Exponent in at-a-station depth-discharge relation.
-        HYDR_ROUGH_COEFF_DS: float (default 0.03)
+        HYDR_ROUGH_COEFF_DS : float (default 0.03)
             Coefficient in bankfull roughness-discharge relation.
-        HYDR_ROUGH_EXP_DS: float (default 0.)
+        HYDR_ROUGH_EXP_DS : float (default 0.)
             Exponent in bankfull roughness-discharge relation.
-        HYDR_ROUGH_EXP_STN: float (default 0.)
+        HYDR_ROUGH_EXP_STN : float (default 0.)
             Exponent in at-a-station roughness-discharge relation.
-        HYDR_SLOPE_EXP: float (default 0.)
+        HYDR_SLOPE_EXP : float (default 0.)
         THETAC: float (default 0.045)
             For "Parker" channel geometry option: critical Shields stress.
-        SHEAR_RATIO: float (default 1.1)
+        SHEAR_RATIO : float (default 1.1)
             For "Parker" channel geometry option: ratio of actual to threshold
             shear stress.
-        BANK_ROUGH_COEFF: float (default 15.)
+        BANK_ROUGH_COEFF : float (default 15.)
             Coefficient in bank roughness-discharge relation
-        BANK_ROUGH_EXP: float (default 0.8)
+        BANK_ROUGH_EXP : float (default 0.8)
             Exponent in bank roughness-discharge relation
-        BANKFULLEVENT: float (default 10.)
+        BANKFULLEVENT : float (default 10.)
             Runoff rate associated with bankfull flood event. Used to compute
             hydraulic geometry.
         """
@@ -1195,12 +1250,36 @@ class InputWriter(DataManager):
                        # CRITICAL_FLOW=1e8,
                        OPT_VAR_SIZE=0,
                        MEDIAN_DIAMETER=0.0007,
-                       BANKERO=0,
-                       BNKHTDEP=0,
-                       DEF_CHAN_DISCR=1,
+                       BANKERO=0.,
+                       BNKHTDEP=0.,
+                       DEF_CHAN_DISCR=1.,
                        FRAC_WID_MOVE=0.1,
                        FRAC_WID_ADD=0.7):
-        
+        """
+        Sets meandering.
+
+        OPTMEANDER : int (default 0)
+            Option for stream meandering.
+        CRITICAL_AREA : float (default 1e8)
+            Minimum drainage area for a meandering channel in stream meander
+            module (m2).
+        OPT_VAR_SIZE : int (default 0)
+            Flag that indicates use of multiple grain sizes in stream meander module.
+        MEDIAN_DIAMETER : float (default 0.0007)
+            Median bed-sediment diameter for use in meander module (m).
+        BANKERO : float (default 0.)
+            Stream-bank erodibility coefficient.
+        BNKHTDEP : float (default 0.)
+            Degree to which bank erosion rate depends on bank height (0 to 1).
+        DEF_CHAN_DISCR : float (default 1.)
+            Default channel node spacing in meander module (m).
+        FRAC_WID_MOVE : float (default 0.1)
+            Maximum distance that a meandering channel point can migrate in one
+            time step, in channel widths.
+        FRAC_WID_ADD : float (default 0.7)
+            Maximum distance of a meandering channel point from a bank point, in
+            channel widths. If exceeded, a new node is added.
+        """
         self.parameters['OPTMEANDER'] = OPTMEANDER
         self.parameters['CRITICAL_AREA'] = CRITICAL_AREA
         # self.parameters['CRITICAL_FLOW'] = CRITICAL_FLOW
@@ -1213,10 +1292,19 @@ class InputWriter(DataManager):
         self.parameters['FRAC_WID_ADD'] = FRAC_WID_ADD
         
     def set_materials(self,
-                      ROCKDENSITYINIT=2270,
-                      SOILBULKDENSITY=740,
-                      WOODDENSITY=450):
-        
+                      ROCKDENSITYINIT=2270.,
+                      SOILBULKDENSITY=740.,
+                      WOODDENSITY=450.):
+        """
+        Sets material properties.
+
+        ROCKDENSITYINIT : float (default 2270.)
+            Initial rock bulk density (kg/m3).
+        SOILBULKDENSITY : float (default 740.)
+            Bulk density of soil (constant) (kg/m3).
+        WOODDENSITY : float (default 450.)
+            Density of wood (kg/m3).
+        """
         self.parameters['ROCKDENSITYINIT'] = ROCKDENSITYINIT
         self.parameters['SOILBULKDENSITY'] = SOILBULKDENSITY
         self.parameters['WOODDENSITY'] = WOODDENSITY
@@ -1228,7 +1316,29 @@ class InputWriter(DataManager):
                       GRAINDIAMi=(0.001, 0, 0, 0, 0, 0, 0, 0, 0),
                       HIDINGEXP=0.75,
                       GRAINDIAM0=0.007):
-        
+        """
+        Sets grain sizes.
+
+        NUMGRNSIZE : int (default 1)
+            Number of grain size classes used in run. Must be consistent with
+            selected sediment transport law.
+        BRPROPORTIONi : array-like of shape (9,) (default (1, 0, 0, 0, 0, 0, 0, 0, 0) )
+            Volumetric proportion of grain-size fraction i generated from eroded
+            bedrock. Enter one per size fraction, starting with 1.
+        REGPROPORTIONi : array-like of shape (9,) (default (1, 0, 0, 0, 0, 0, 0, 0, 0) )
+            Initial volumetric proportion of size i in regolith layers. Must
+            specify one value for each grain size class. The range is zero to one.
+        GRAINDIAMi : array-like of shape (9,) (default (0.001, 0, 0, 0, 0, 0, 0, 0, 0) )
+            Diameter of grain size class i. There must be a value corresponding
+            to each grain-size class used in the run. For example, a run with two
+            grain-size classes must have GRAINDIAM1 and GRAINDIAM2.
+        HIDINGEXP : float (default 0.75)
+            Exponent in equation for correcting critical shear stress to account
+            for protrusion and hiding when multiple grain-size fractions are
+            present on the bed.
+        GRAINDIAM0 : float (default 0.007)
+            Representative d50 grain size (if NUMGRNSIZE=1) (m).
+        """
         self.parameters['NUMGRNSIZE'] = NUMGRNSIZE
         for i, br_proportion in enumerate(BRPROPORTIONi):
             self.parameters['BRPROPORTION' + str(i + 1)] = br_proportion
@@ -1248,55 +1358,72 @@ class InputWriter(DataManager):
                               MB=0.66667,
                               NB=0.66667,
                               PB=1.5,
-                              TAUCB=30,
-                              TAUCR=30,
-                              BETA=1,
+                              TAUCB=30.,
+                              TAUCR=30.,
+                              BETA=1.,
                               OPTDETACHLIM=0,
                               TRANSPORT_LAW=1,
                               KF=617.,
                               MF=0.66667,
                               NF=0.66667,
                               PF=1.5):
-        ''' Set the parameters for fluvial erosion and deposition
+        """
+        Sets the parameters for fluvial erosion and deposition.
 
-        @param OPTNOFLUVIAL: Option to turn off fluvial processes (default to false)
-        @param DETACHMENT_LAW: Code for detachment-capacity law to be applied: 
-                               0. Power law, form 1
-                               1. Power law, form 2
-                               2. Almost parabolic law
-                               3. Generalized f(Qs) detachment-rule
-                               4. Dummy law for no fluvial erosion
-        @param KB: Erodibility coefficient for bedrock. If layers are read in
-                   from a previous run, values from layer file are used instead
-        @param KR: Erodibility coefficient for regolith. If layers are read in
-                   from a previous run, values from layer file are used instead
-        @param KT: (Pa per (m2/s)M, where M is Mb for detachment and Mf for
-                    sediment transport) Coefficient relating shear stress to
-                    discharge and slope. Can be calculated from water density,
-                    gravitational acceleration, and roughness; see, e.g., Tucker
-                    and Slingerland (1997)
-        @param MB: Discharge exponent in detachment capacity equation
-        @param NB: Slope exponent in detachment capacity equation
-        @param PB: Excess power/shear exponent in detachment capacity equation
-        @param TAUCB: (normally Pa) Detachment threshold for bedrock
-        @param TAUCR: (normally Pa) Detachment threshold for regolith
-        @param BETA: Fraction of eroded sediment that forms bed load. Applies
-                     only to sediment-flux-dependent detachment laws
-        @param OPTDETACHLIM: Option for detachment-limited fluvial erosion only
-        @param TRANSPORT_LAW: Code for fluvial transport capacity law to be applied:
-                              0. Power-law transport formula
-                              1. Power-law transport formula, form 2
-                              2. Bridge-Dominic form of Bagnold bedload formula
-                              3. Wilcock sand-gravel formula
-                              4. Multi-size power-law formula
-                              5. Willgoose/Riley mine tailings formula
-                              6. Ultra-simplified power-law transport formula
-                              7. Dummy law for no fluvial transport
-        @param KF: Fluvial sediment transport efficiency coefficient
-        @param MF: Discharge exponent in fluvial transport capacity equation
-        @param NF: Slope exponent in fluvial transport capacity equation
-        @param PF: Excess power/shear exponent in fluvial transport capacity equation
-        '''
+        OPTNOFLUVIAL : int (default 0)
+            Option to turn off fluvial processes (default to false).
+        DETACHMENT_LAW : int (default 1)
+            Code for detachment-capacity law to be applied: 
+            0 = Power law, form 1;
+            1 = Power law, form 2;
+            2 = Almost parabolic law;
+            3 = Generalized f(Qs) detachment-rule;
+            4 = Dummy law for no fluvial erosion.
+        KB : float (default 0.0005)
+            Erodibility coefficient for bedrock. If layers are read in from a
+            previous run, values from layer file are used instead.
+        KR : float (default 0.0005)
+            Erodibility coefficient for regolith. If layers are read in from a
+            previous run, values from layer file are used instead.
+        KT : float (default 1000.)
+             Coefficient relating shear stress to discharge and slope
+             (Pa per (m2/s)M, where M is Mb for detachment and Mf for sediment
+             transport). Can be calculated from water density, gravitational
+             acceleration, and roughness; see, e.g., Tucker and Slingerland (1997).
+        MB : float (default 0.66667)
+            Discharge exponent in detachment capacity equation.
+        NB : float (default 0.66667)
+            Slope exponent in detachment capacity equation.
+        PB : float (default 1.5)
+            Excess power/shear exponent in detachment capacity equation.
+        TAUCB : float (default 30.)
+            Detachment threshold for bedrock (normally Pa).
+        TAUCR : float (default 30.)
+            Detachment threshold for regolith (normally Pa).
+        BETA : float (default 1.)
+            Fraction of eroded sediment that forms bed load. Applies only to
+            sediment-flux-dependent detachment laws.
+        OPTDETACHLIM : int (default 0)
+            Option for detachment-limited fluvial erosion only.
+        TRANSPORT_LAW : int (default 1)
+            Code for fluvial transport capacity law to be applied:
+            0 = Power-law transport formula;
+            1 = Power-law transport formula, form 2;
+            2 = Bridge-Dominic form of Bagnold bedload formula;
+            3 = Wilcock sand-gravel formula;
+            4 = Multi-size power-law formula;
+            5 = Willgoose/Riley mine tailings formula;
+            6 = Ultra-simplified power-law transport formula;
+            7 = Dummy law for no fluvial transport.
+        KF : float (default 617.)
+            Fluvial sediment transport efficiency coefficient.
+        MF : float (default 0.66667)
+            Discharge exponent in fluvial transport capacity equation.
+        NF : float (default 0.66667)
+            Slope exponent in fluvial transport capacity equation.
+        PF : float (default 1.5)
+            Excess power/shear exponent in fluvial transport capacity equation.
+        """
         self.parameters['OPTNOFLUVIAL'] = OPTNOFLUVIAL
         self.parameters['DETACHMENT_LAW'] = DETACHMENT_LAW
         self.parameters['KB'] = KB
@@ -1324,7 +1451,31 @@ class InputWriter(DataManager):
                                         PB=1.5,
                                         TAUCB=30,
                                         TAUCR=30):
-        
+        """
+        Sets the detachment law 'Power law, form 1' for fluvial erosion and deposition.
+
+        KB : float (default 0.0005)
+            Erodibility coefficient for bedrock. If layers are read in from a
+            previous run, values from layer file are used instead.
+        KR : float (default 0.0005)
+            Erodibility coefficient for regolith. If layers are read in from a
+            previous run, values from layer file are used instead.
+        KT : float (default 1000.)
+             Coefficient relating shear stress to discharge and slope
+             (Pa per (m2/s)M, where M is Mb for detachment and Mf for sediment
+             transport). Can be calculated from water density, gravitational
+             acceleration, and roughness; see, e.g., Tucker and Slingerland (1997).
+        MB : float (default 0.66667)
+            Discharge exponent in detachment capacity equation.
+        NB : float (default 0.66667)
+            Slope exponent in detachment capacity equation.
+        PB : float (default 1.5)
+            Excess power/shear exponent in detachment capacity equation.
+        TAUCB : float (default 30.)
+            Detachment threshold for bedrock (normally Pa).
+        TAUCR : float (default 30.)
+            Detachment threshold for regolith (normally Pa).
+        """
         self.parameters['OPTNOFLUVIAL'] = 0
         self.parameters['DETACHMENT_LAW'] = 0
         self.parameters['KB'] = KB
@@ -1345,7 +1496,31 @@ class InputWriter(DataManager):
                                         PB=1.5,
                                         TAUCB=30,
                                         TAUCR=30):
-        
+        """
+        Sets the detachment law 'Power law, form 2' for fluvial erosion and deposition.
+
+        KB : float (default 0.0005)
+            Erodibility coefficient for bedrock. If layers are read in from a
+            previous run, values from layer file are used instead.
+        KR : float (default 0.0005)
+            Erodibility coefficient for regolith. If layers are read in from a
+            previous run, values from layer file are used instead.
+        KT : float (default 1000.)
+             Coefficient relating shear stress to discharge and slope
+             (Pa per (m2/s)M, where M is Mb for detachment and Mf for sediment
+             transport). Can be calculated from water density, gravitational
+             acceleration, and roughness; see, e.g., Tucker and Slingerland (1997).
+        MB : float (default 0.66667)
+            Discharge exponent in detachment capacity equation.
+        NB : float (default 0.66667)
+            Slope exponent in detachment capacity equation.
+        PB : float (default 1.5)
+            Excess power/shear exponent in detachment capacity equation.
+        TAUCB : float (default 30.)
+            Detachment threshold for bedrock (normally Pa).
+        TAUCR : float (default 30.)
+            Detachment threshold for regolith (normally Pa).
+        """
         self.parameters['OPTNOFLUVIAL'] = 0
         self.parameters['DETACHMENT_LAW'] = 1
         self.parameters['KB'] = KB
@@ -1363,7 +1538,24 @@ class InputWriter(DataManager):
                                             MB=0.5,
                                             NB=1,
                                             BETA=1):
-        
+        """
+        Sets the detachment law 'Almost parabolic law' for fluvial erosion and
+        deposition.
+
+        KB : float (default 0.0005)
+            Erodibility coefficient for bedrock. If layers are read in from a
+            previous run, values from layer file are used instead.
+        KR : float (default 0.0005)
+            Erodibility coefficient for regolith. If layers are read in from a
+            previous run, values from layer file are used instead.
+        MB : float (default 0.66667)
+            Discharge exponent in detachment capacity equation.
+        NB : float (default 0.66667)
+            Slope exponent in detachment capacity equation.
+        BETA : float (default 1.)
+            Fraction of eroded sediment that forms bed load. Applies only to
+            sediment-flux-dependent detachment laws.
+        """
         self.parameters['OPTNOFLUVIAL'] = 0
         self.parameters['DETACHMENT_LAW'] = 2
         self.parameters['KB'] = KB
@@ -1378,7 +1570,24 @@ class InputWriter(DataManager):
                                            MB=0.5,
                                            NB=1,
                                            BETA=1):
-        
+        """
+        Sets the detachment law 'Generalized f(Qs) detachment-rule' for fluvial
+        erosion and deposition.
+
+        KB : float (default 0.0005)
+            Erodibility coefficient for bedrock. If layers are read in from a
+            previous run, values from layer file are used instead.
+        KR : float (default 0.0005)
+            Erodibility coefficient for regolith. If layers are read in from a
+            previous run, values from layer file are used instead.
+        MB : float (default 0.66667)
+            Discharge exponent in detachment capacity equation.
+        NB : float (default 0.66667)
+            Slope exponent in detachment capacity equation.
+        BETA : float (default 1.)
+            Fraction of eroded sediment that forms bed load. Applies only to
+            sediment-flux-dependent detachment laws.
+        """
         self.parameters['OPTNOFLUVIAL'] = 0
         self.parameters['DETACHMENT_LAW'] = 3
         self.parameters['KB'] = KB
@@ -1388,7 +1597,10 @@ class InputWriter(DataManager):
         self.parameters['BETA'] = BETA
 
     def set_detachment_dummy_law(self):
-        
+        """
+        Sets the detachment law 'Dummy law for no fluvial erosion' for fluvial
+        erosion and deposition.
+        """
         self.parameters['OPTNOFLUVIAL'] = 0
         self.parameters['DETACHMENT_LAW'] = 4
 
@@ -1399,7 +1611,30 @@ class InputWriter(DataManager):
                           MF=0.66667,
                           NF=0.66667,
                           PF=1.5):
-        
+        """
+        Sets the transport law for fluvial erosion and deposition.
+
+        OPTDETACHLIM : int (default 0)
+            Option for detachment-limited fluvial erosion only.
+        TRANSPORT_LAW : int (default 1)
+            Code for fluvial transport capacity law to be applied:
+            0 = Power-law transport formula;
+            1 = Power-law transport formula, form 2;
+            2 = Bridge-Dominic form of Bagnold bedload formula;
+            3 = Wilcock sand-gravel formula;
+            4 = Multi-size power-law formula;
+            5 = Willgoose/Riley mine tailings formula;
+            6 = Ultra-simplified power-law transport formula;
+            7 = Dummy law for no fluvial transport.
+        KF : float (default 617.)
+            Fluvial sediment transport efficiency coefficient.
+        MF : float (default 0.66667)
+            Discharge exponent in fluvial transport capacity equation.
+        NF : float (default 0.66667)
+            Slope exponent in fluvial transport capacity equation.
+        PF : float (default 1.5)
+            Excess power/shear exponent in fluvial transport capacity equation.
+        """
         self.parameters['OPTNOFLUVIAL'] = 0
         self.parameters['OPTDETACHLIM'] = OPTDETACHLIM
         self.parameters['TRANSPORT_LAW'] = TRANSPORT_LAW
@@ -1411,15 +1646,42 @@ class InputWriter(DataManager):
     def set_overbank_deposition(self,
                                 OPTFLOODPLAIN=0,
                                 FP_DRAREAMIN=1e8,
-                                FP_BANKFULLEVENT=20,
-                                FP_MU=1,
-                                FP_LAMBDA=200,
+                                FP_BANKFULLEVENT=20.,
+                                FP_MU=1.,
+                                FP_LAMBDA=200.,
                                 FP_OPTCONTROLCHAN=0,
-                                FP_VALDROP=1,
-                                FP_INLET_ELEVATION=1):
-        
-        # HYDR_DEP_COEFF_DS, HYDR_DEP_EXP_STN, HYDR_DEP_EXP_DS, NUMGRNSIZE
-        
+                                FP_VALDROP=1.,
+                                FP_INLET_ELEVATION=1.):
+        """
+        Sets the parameters for overbank deposition. Overbank deposition also
+        requires `HYDR_DEP_COEFF_DS`, `HYDR_DEP_EXP_STN`, `HYDR_DEP_EXP_DS` and
+        `NUMGRNSIZE` (see `set_hydraulic_geometry`  and `set_grainsize`).
+
+        OPTFLOODPLAIN : int (default 0)
+            Option for floodplain over-bank deposition.
+        FP_DRAREAMIN : float (default 1e8)
+            In floodplain module, the minimum drainage area that defines a "major"
+            channel that is subject to overbank flooding and sedimentation (m2).
+        FP_BANKFULLEVENT : float (default 20.)
+            In floodplain module, the minimum runoff rate required to generate a
+            flood (m/yr).
+        FP_MU : float (default 1.)
+            In floodplain module, the rate coefficient for overbank sedimentation
+            (μ, m/yr) (see Clevis et al., 2006a).
+        FP_LAMBDA : float (default 200.)
+            In floodplain module, the distance decay coefficient for sedimentation
+            rate (e-folding length for sedimentation rate as a function of distance
+            from the main channel) (λ, m).
+        FP_OPTCONTROLCHAN : int (default 0)
+            When the floodplain module is used, setting this option tells the
+            model to drive the altitude of the main channel as a boundary
+            condition.  See Clevis et al. (2006a).
+        FP_VALDROP : float (default 1.)
+            In floodplain module, the difference in altitude of the main channel
+            between its inlet and its exit point (m).
+        FP_INLET_ELEVATION : float (default 1.)
+            In floodplain module, the altitude of the inlet of the main channel (m).
+        """
         self.parameters['OPTFLOODPLAIN'] = OPTFLOODPLAIN
         self.parameters['FP_DRAREAMIN'] = FP_DRAREAMIN
         self.parameters['FP_BANKFULLEVENT'] = FP_BANKFULLEVENT
@@ -1433,12 +1695,34 @@ class InputWriter(DataManager):
                                 OPTNODIFFUSION=0,
                                 KD=0.01,
                                 OPTDIFFDEP=0,
-                                DIFFUSIONTHRESHOLD=0,
+                                DIFFUSIONTHRESHOLD=0.,
                                 OPT_NONLINEAR_DIFFUSION=0,
                                 OPT_DEPTH_DEPENDENT_DIFFUSION=0,
-                                DIFFDEPTHSCALE=1,
+                                DIFFDEPTHSCALE=1.,
                                 CRITICAL_SLOPE=0.5774):
-        
+        """
+        Sets the parameters for hillslope transport.
+
+        OPTFLOODPLAIN : int (default 0)
+            Option to turn off diffusive processes (default to false).
+        KD : float (default 0.01)
+            Hillslope diffusivity coefficient (m2/yr).
+        OPTDIFFDEP : int (default 0)
+            Option to deactivate deposition by hillslope diffusion.
+        DIFFUSIONTHRESHOLD : float (default 0)
+            When this parameter is greater than zero, it is the drainage area
+            above which slope-dependent (“diffusive”) creep transport no longer
+            takes place. Designed for use with sediment-flux-dependent transport
+            functions; see Gasparini et al. (2007).
+        OPT_NONLINEAR_DIFFUSION : int (default 0)
+            Option for nonlinear diffusion model of soil creep.
+        OPT_DEPTH_DEPENDENT_DIFFUSION : int (default 0)
+            Option for depth dependent creep transport.
+        DIFFDEPTHSCALE : float (default 1.)
+            Depth scale for depth-dependent diffusion.
+        CRITICAL_SLOPE : float (default 0.5774)
+            Threshold slope gradient for nonlinear creep law.
+        """
         self.parameters['OPTNODIFFUSION'] = OPTNODIFFUSION
         self.parameters['KD'] = KD
         self.parameters['OPTDIFFDEP'] = OPTDIFFDEP
@@ -1451,28 +1735,32 @@ class InputWriter(DataManager):
     def set_landsliding(self,
                         OPT_LANDSLIDES=0,
                         OPT_3D_LANDSLIDES=0,
-                        FRICSLOPE=1,
+                        FRICSLOPE=1.,
                         DF_RUNOUT_RULE=0,
                         DF_SCOUR_RULE=0,
                         DF_DEPOSITION_RULE=0):
-        ''' Set the parameters for landsliding
+        """
+        Sets the parameters for landsliding. Landsliding also requires
+        `ROCKDENSITYINIT` and `WOODDENSITY` (see `material_parameters`).
 
-        @param OPT_LANDSLIDES: Option to turn on landsliding (default to false)
-        @param OPT_3D_LANDSLIDES: Option for determining which landslide function
-                                  to use (default to false)
-        @param FRICSLOPE: Tangent of angle of repose for soil (unitless)
-        @param DF_RUNOUT_RULE: Set runout rules:
-                               0. No debris flow runout
-                               1. Runout exits domain
-        @param DF_SCOUR_RULE: Set scour rules:
-                              0. No debris flow scour
-                              1. Scour all sediment
-        @param DF_DEPOSITION_RULE: Set deposition rules:
-                                   0. No debris flow deposition
-
-        '''
-#         print('Landsliding also requires ROCKDENSITYINIT and WOODDENSITY (see material_parameters)')
-        
+        OPT_LANDSLIDES : int (default 0)
+            Option to turn on landsliding (default to false).
+        OPT_3D_LANDSLIDES : int (default 0)
+            Option for determining which landslide function to use (default to false).
+        FRICSLOPE : float (default 1.)
+            Tangent of angle of repose for soil (unitless).
+        DF_RUNOUT_RULE : int (default 0)
+            Set runout rules:
+            0 = no debris flow runout;
+            1 = runout exits domain.
+        DF_SCOUR_RULE : int (default 0)
+            Set scour rules:
+            0 = no debris flow scour;
+            1 = scour all sediment.
+        DF_DEPOSITION_RULE : int (default 0)
+            Set deposition rules:
+            0 = no debris flow deposition.
+        """
         self.parameters['OPT_LANDSLIDES'] = OPT_LANDSLIDES
         self.parameters['OPT_3D_LANDSLIDES'] = OPT_3D_LANDSLIDES
         self.parameters['FRICSLOPE'] = FRICSLOPE
@@ -1482,8 +1770,15 @@ class InputWriter(DataManager):
         
     def set_eolian_deposition(self,
                               OPTLOESSDEP=0,
-                              LOESS_DEP_RATE=0):
-        
+                              LOESS_DEP_RATE=0.):
+        """
+        Sets the parameters for eolian deposition.
+
+        OPTLOESSDEP : int (default 0)
+            Space-time uniform surface accumulation of sediment (loess).
+        LOESS_DEP_RATE : float (default 0.)
+            Rate of accumulation of aeolian sediment across the landscape (m/yr).
+        """
         self.parameters['OPTLOESSDEP'] = OPTLOESSDEP
         self.parameters['LOESS_DEP_RATE'] = LOESS_DEP_RATE
 
@@ -1496,9 +1791,33 @@ class InputWriter(DataManager):
                        SOILPRODRATEINTERCEPT=0.00055,
                        SOILPRODRATESLOPE=0.00000017,
                        SOILPRODDEPTH=0.30):
-        
-#         print('Weathering also requires ROCKDENSITYINIT and SOILBULKDENSITY (see material_parameters)')
-        
+        """
+        Sets weathering. Weathering also requires `ROCKDENSITYINIT` and
+        `SOILBULKDENSITY` (see `material_parameters`).
+
+        CHEM_WEATHERING_LAW : int (default 0)
+            Possible values 0-1:
+            0 = None;
+            1 = Dissolution.
+        MAXDISSOLUTIONRATE : float (default 0.099)
+            Maximum dissolution rate (kg/m3/yr).
+        CHEMDEPTH : float (default 0.18)
+            Depth scale for dissolution (m).
+        PRODUCTION_LAW : int (default 0)
+            Possible values 0-2:
+            0 = None;
+            1 = Exponential law;
+            2 = Exp. with density dep.
+        SOILPRODRATE : float (default 0.00055)
+            Uniform and constant soil production rate for zero soil depth for
+            exponential law (m/yr).
+        SOILPRODRATEINTERCEPT : float (default 0.00055)
+            Density-dependent soil production rate intercept (m/yr).
+        SOILPRODRATESLOPE : float (default 0.00000017)
+            Density-dependent soil production rate slope ( (m/yr)/(kg/m3) ).
+        SOILPRODDEPTH : float (default 0.30)
+            Depth scale for soil production rate (m).
+        """
         self.parameters['CHEM_WEATHERING_LAW'] = CHEM_WEATHERING_LAW
         self.parameters['MAXDISSOLUTIONRATE'] = MAXDISSOLUTIONRATE
         self.parameters['CHEMDEPTH'] = CHEMDEPTH
@@ -1511,13 +1830,27 @@ class InputWriter(DataManager):
     def set_vegetation(self,
                        OPTVEG=0,
                        OPTGRASS_SIMPLE=1,
-                       VEG_KVD=0,
-                       VEG_TV=1,
-                       TAUC=0,
-                       VEG_TAUCVEG=0):
-        
-#         print('Forest also requires OPTFOREST (see forest_parameters) and OPTFIRE (see fire_parameters)')
-                
+                       VEG_KVD=0.,
+                       VEG_TV=1.,
+                       TAUC=0.,
+                       VEG_TAUCVEG=0.):
+        """
+        Sets vegetation. Vegetation also requires `OPTFOREST` (see `forest_parameters`)
+        and `OPTFIRE` (see `fire_parameters`).
+
+        OPTVEG : int (default 0)
+            Option for dynamic vegetation layer (see Collins et al., 2004).
+        OPTGRASS_SIMPLE : int (default 1)
+            Option for simple grass.
+        VEG_KVD : float (default 0.)
+            Vegetation erosion coefficient (dims LT/M).
+        VEG_TV : float (default 1.)
+            Vegetation regrowth time scale (years).
+        TAUC : float (default 0.)
+            Erosion threshold on bare soil.
+        VEG_TAUCVEG : float (default 0.)
+            Erosion threshold under 100% cover.
+        """
         self.parameters['OPTVEG'] = OPTVEG
         self.parameters['OPTGRASS_SIMPLE'] = OPTGRASS_SIMPLE
         self.parameters['VEG_KVD'] = VEG_KVD
@@ -1527,33 +1860,58 @@ class InputWriter(DataManager):
         
     def set_forest(self,
                    OPTFOREST=0,
-                   ROOTDECAY_K=0,
-                   ROOTDECAY_N=0,
-                   ROOTGROWTH_A=1,
-                   ROOTGROWTH_B=1,
-                   ROOTGROWTH_C=1,
-                   ROOTGROWTH_F=1,
-                   ROOTSTRENGTH_J=0,
-                   MAXVERTROOTCOHESION=0,
-                   MAXLATROOTCOHESION=0,
+                   ROOTDECAY_K=0.,
+                   ROOTDECAY_N=0.,
+                   ROOTGROWTH_A=1.,
+                   ROOTGROWTH_B=1.,
+                   ROOTGROWTH_C=1.,
+                   ROOTGROWTH_F=1.,
+                   ROOTSTRENGTH_J=0.,
+                   MAXVERTROOTCOHESION=0.,
+                   MAXLATROOTCOHESION=0.,
                    TREEHEIGHTINDEX=0,
-                   VEGWEIGHT_MAX=0,
-                   VEGWEIGHT_A=0,
-                   VEGWEIGHT_B=0,
-                   VEGWEIGHT_C=0,
-                   VEGWEIGHT_K=0,
+                   VEGWEIGHT_MAX=0.,
+                   VEGWEIGHT_A=0.,
+                   VEGWEIGHT_B=0.,
+                   VEGWEIGHT_C=0.,
+                   VEGWEIGHT_K=0.,
                    BLOWDOWNPARAM=0,
                    BLOW_SEED=0,
-                   TREEDIAM_B0=0,
-                   TREEDIAM_B1=0,
-                   TREEDIAM_B2=0,
-                   WOODDECAY_K=0,
-                   INITSTANDAGE=0):
-        
+                   TREEDIAM_B0=0.,
+                   TREEDIAM_B1=0.,
+                   TREEDIAM_B2=0.,
+                   WOODDECAY_K=0.,
+                   INITSTANDAGE=0.):
+        """
+        Sets forest. Forest also requires `WOODDENSITY` (see `material_parameters`)
+        and `FSEED` (see `run_control_parameters`).
+
+        OPTFOREST : int (default 0)
+            Option for basic forest evolution
+        ROOTDECAY_K : float (default 0.)
+        ROOTDECAY_N : float (default 0.)
+        ROOTGROWTH_A : float (default 1.)
+        ROOTGROWTH_B : float (default 1.)
+        ROOTGROWTH_C : float (default 1.)
+        ROOTGROWTH_F : float (default 1.)
+        ROOTSTRENGTH_J : float (default 0.)
+        MAXVERTROOTCOHESION : float (default 0.)
+        MAXLATROOTCOHESION : float (default 0.)
+        TREEHEIGHTINDEX : int (default 0)
+        VEGWEIGHT_MAX : float (default 0.)
+        VEGWEIGHT_A : float (default 0.)
+        VEGWEIGHT_B : float (default 0.)
+        VEGWEIGHT_C : float (default 0.)
+        VEGWEIGHT_K : float (default 0.)
+        BLOWDOWNPARAM : int (default 0)
+        BLOW_SEED : int (default 0)
+        TREEDIAM_B0 : float (default 0.)
+        TREEDIAM_B1 : float (default 0.)
+        TREEDIAM_B2 : float (default 0.)
+        WOODDECAY_K : float (default 0.)
+        INITSTANDAGE : float (default 0.)
+        """
         # TODO: Find default values
-        
-#         print('Forest also requires WOODDENSITY (see material_parameters) and FSEED (see run_control_parameters)')
-        
         self.parameters['OPTFOREST'] = OPTFOREST
         self.parameters['ROOTDECAY_K'] = ROOTDECAY_K
         self.parameters['ROOTDECAY_N'] = ROOTDECAY_N
@@ -1580,25 +1938,51 @@ class InputWriter(DataManager):
 
     def set_fire(self,
                  OPTFIRE=0,
-                 IFRDUR=1,
+                 IFRDUR=1.,
                  OPTRANDOMFIRES=0):
-        
-#         print('Fire also requires FSEED (see run_control_parameters)')
-        
+        """
+        Sets fire. Fire also requires FSEED (see `run_control_parameters`).
+
+        OPTFIRE : int (default 0)
+            Option for random fires assuming an exponential distribution of time
+            to the next fire.
+        IFRDUR : float (default 1.)
+            Mean time between fires.
+        OPTRANDOMFIRES : int (default 0)
+            Random fires.
+        """
         self.parameters['OPTFIRE'] = OPTFIRE
         self.parameters['IFRDUR'] = IFRDUR
         self.parameters['OPTRANDOMFIRES'] = OPTRANDOMFIRES
 
     def set_various(self,
                     OPTTSOUTPUT=1,
-                    TSOPINTRVL=100,
+                    TSOPINTRVL=100.,
                     SURFER=0,
                     OPTEXPOSURETIME=0,
                     OPTFOLDDENS=0,
                     OPT_TRACK_WATER_SED_TIMESERIES=0,
                     OPT_FREEZE_ELEVATIONS=0,
                     OPTSTREAMLINEBNDY=0):
-        
+        """
+        Sets various options.
+
+        OPTTSOUTPUT : int (default 1)
+            Option for output of quantities at each storm (time step).
+        TSOPINTRVL : float (default 100.)
+            Not currently operational.
+        SURFER : int (default 0)
+            Option for output in a Surfer-compatible data format.
+        OPTEXPOSURETIME : int (default 0)
+            Option for tracking surface-layer exposure ages.
+        OPTFOLDDENS : int (default 0)
+            Option for mesh densification around a growing fold.
+        OPT_TRACK_WATER_SED_TIMESERIES : int (default 0)
+            Option to record timeseries Q and Qs.
+        OPT_FREEZE_ELEVATIONS : int (default 0)
+        OPTSTREAMLINEBNDY : int (default 0)
+            Option for converting streamlines to open boundaries.
+        """
         self.parameters['OPTTSOUTPUT'] = OPTTSOUTPUT
         self.parameters['TSOPINTRVL'] = TSOPINTRVL
         self.parameters['SURFER'] = SURFER
@@ -1614,7 +1998,9 @@ class InputWriter(DataManager):
                         value,
                         save_previous_file=True,
                         random_state=None):
-        
+        """
+        Draws a value for a random parameter.
+        """
         if parameter == 'OUTFILENAME':
             if self.init_realization_nb is not None:
                 value += '_' + str(self.init_realization_nb + realization)
@@ -1636,7 +2022,9 @@ class InputWriter(DataManager):
                          realization,
                          save_previous_file=True,
                          random_state=None):
-
+        """
+        Draws values for the random parameters.
+        """
         if random_state is None:
             random_state = np.random.RandomState(self.seed + realization)
 
@@ -1648,7 +2036,9 @@ class InputWriter(DataManager):
                                  random_state=random_state)
 
     def write_parameter(self, input_file, parameter, value, parameter_name=None):
-        
+        """
+        Writes a parameter value into a CHILD input file.
+        """
         if parameter_name is None:
             parameter_name = parameter
         if parameter in self.parameter_descriptions:
@@ -1659,7 +2049,9 @@ class InputWriter(DataManager):
         input_file.write(str(value) + '\n')
         
     def write_header(self, input_file, outfile_name, description, line_size):
-        
+        """
+        Writes the header of a CHILD input file.
+        """
         input_file.write('#' + (line_size - 1)*'-' + '\n')
         input_file.write('#\n')
         input_file.write(divide_line(outfile_name + '.in: ' + description, line_size))
@@ -1671,7 +2063,9 @@ class InputWriter(DataManager):
                          resolve_parameters=False,
                          save_previous_file=True,
                          random_state=None):
-
+        """
+        Writes a CHILD input file.
+        """
         line_size = 68
 
         if not self.parameter_values[realization] or resolve_parameters == True:
@@ -1708,7 +2102,9 @@ class InputWriter(DataManager):
                           COMMENTS=None,
                           resolve_parameters=False,
                           random_state=None):
-
+        """
+        Writes the CHILD input files when using random parameters.
+        """
         for r in range(self.nb_realizations):
 
             self.write_input_file(r,
@@ -1717,17 +2113,23 @@ class InputWriter(DataManager):
                                   random_state=random_state)
 
     def locate_input_file(self, realization=0):
-        
+        """
+        Locates the CHILD input file.
+        """
         return os.path.join(self.base_directory,
                             self.parameter_values[realization]['OUTFILENAME'] + '.in')
     
     def get_base_name(self, realization=0):
-        
+        """
+        Gets the base name.
+        """
         return os.path.join(self.base_directory,
                             self.parameter_values[realization]['OUTFILENAME'])
     
     def delete_input_file(self, realization=0):
-        
+        """
+        Deletes the CHILD input file.
+        """
         if os.path.isfile(self.locate_input_file(realization)) == True:
             subprocess.call('rm ' + self.locate_input_file(realization), shell=True)
 
@@ -1735,7 +2137,9 @@ class InputWriter(DataManager):
                                       parameters,
                                       realization=None,
                                       input_file_path=None):
-
+        """
+        Extracts the parameters from a CHILD input file.
+        """
         file_suffix = ''
         if realization is not None:
             file_suffix = '_' + str(realization)    
