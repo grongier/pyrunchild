@@ -1,6 +1,19 @@
 """CHILD utils"""
 
-# LICENCE GOES HERE
+# CSIRO Open Source Software Licence Agreement (variation of the BSD / MIT License)
+# Copyright (c) 2021, Commonwealth Scientific and Industrial Research Organisation (CSIRO) ABN 41 687 119 230.
+# All rights reserved. CSIRO is willing to grant you a licence to this Python package on the following terms, except where otherwise indicated for third party material.
+# Redistribution and use of this software in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+# * Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+# * Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+# * Neither the name of CSIRO nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission of CSIRO.
+# EXCEPT AS EXPRESSLY STATED IN THIS AGREEMENT AND TO THE FULL EXTENT PERMITTED BY APPLICABLE LAW, THE SOFTWARE IS PROVIDED "AS-IS". CSIRO MAKES NO REPRESENTATIONS, WARRANTIES OR CONDITIONS OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY REPRESENTATIONS, WARRANTIES OR CONDITIONS REGARDING THE CONTENTS OR ACCURACY OF THE SOFTWARE, OR OF TITLE, MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, THE ABSENCE OF LATENT OR OTHER DEFECTS, OR THE PRESENCE OR ABSENCE OF ERRORS, WHETHER OR NOT DISCOVERABLE.
+# TO THE FULL EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL CSIRO BE LIABLE ON ANY LEGAL THEORY (INCLUDING, WITHOUT LIMITATION, IN AN ACTION FOR BREACH OF CONTRACT, NEGLIGENCE OR OTHERWISE) FOR ANY CLAIM, LOSS, DAMAGES OR OTHER LIABILITY HOWSOEVER INCURRED.  WITHOUT LIMITING THE SCOPE OF THE PREVIOUS SENTENCE THE EXCLUSION OF LIABILITY SHALL INCLUDE: LOSS OF PRODUCTION OR OPERATION TIME, LOSS, DAMAGE OR CORRUPTION OF DATA OR RECORDS; OR LOSS OF ANTICIPATED SAVINGS, OPPORTUNITY, REVENUE, PROFIT OR GOODWILL, OR OTHER ECONOMIC LOSS; OR ANY SPECIAL, INCIDENTAL, INDIRECT, CONSEQUENTIAL, PUNITIVE OR EXEMPLARY DAMAGES, ARISING OUT OF OR IN CONNECTION WITH THIS AGREEMENT, ACCESS OF THE SOFTWARE OR ANY OTHER DEALINGS WITH THE SOFTWARE, EVEN IF CSIRO HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH CLAIM, LOSS, DAMAGES OR OTHER LIABILITY.
+# APPLICABLE LEGISLATION SUCH AS THE AUSTRALIAN CONSUMER LAW MAY APPLY REPRESENTATIONS, WARRANTIES, OR CONDITIONS, OR IMPOSES OBLIGATIONS OR LIABILITY ON CSIRO THAT CANNOT BE EXCLUDED, RESTRICTED OR MODIFIED TO THE FULL EXTENT SET OUT IN THE EXPRESS TERMS OF THIS CLAUSE ABOVE "CONSUMER GUARANTEES".  TO THE EXTENT THAT SUCH CONSUMER GUARANTEES CONTINUE TO APPLY, THEN TO THE FULL EXTENT PERMITTED BY THE APPLICABLE LEGISLATION, THE LIABILITY OF CSIRO UNDER THE RELEVANT CONSUMER GUARANTEE IS LIMITED (WHERE PERMITTED AT CSIRO'S OPTION) TO ONE OF FOLLOWING REMEDIES OR SUBSTANTIALLY EQUIVALENT REMEDIES:
+# (a)               THE REPLACEMENT OF THE SOFTWARE, THE SUPPLY OF EQUIVALENT SOFTWARE, OR SUPPLYING RELEVANT SERVICES AGAIN;
+# (b)               THE REPAIR OF THE SOFTWARE;
+# (c)               THE PAYMENT OF THE COST OF REPLACING THE SOFTWARE, OF ACQUIRING EQUIVALENT SOFTWARE, HAVING THE RELEVANT SERVICES SUPPLIED AGAIN, OR HAVING THE SOFTWARE REPAIRED.
+# IN THIS CLAUSE, CSIRO INCLUDES ANY THIRD PARTY AUTHOR OR OWNER OF ANY PART OF THE SOFTWARE OR MATERIAL DISTRIBUTED WITH IT.  CSIRO MAY ENFORCE ANY RIGHTS ON BEHALF OF THE RELEVANT THIRD PARTY.
 
 
 import os
@@ -10,6 +23,9 @@ import textwrap
 import numpy as np
 from scipy import stats, linalg
 from scipy.spatial import cKDTree
+import alphashape
+import rasterio
+from rasterio.features import rasterize
 import colorsys
 from matplotlib import colors
 
@@ -121,6 +137,41 @@ def griddata_idw(points, values, xi, n_neighbors=8, p=2.):
     weights[0, distances[:, 0] != 0] = 1/distances[distances[:, 0] != 0]**p
 
     return np.sum(weights*values[:, neighbors], axis=-1)/np.sum(weights, axis=-1)
+
+
+def estimate_channel_belt(lithology, threshold=1e-3, alpha=0.15):
+    """
+    Estimates the channel belt from the proportion of coarse sediments.
+    
+    Parameters
+    ----------
+    lithology : ndarray
+        The coarse sediment proportion.
+    threshold : float (default 1e-3)
+        The threshold of coarse sediments above which we consider that a river
+        was there, so the area belongs to the channel belt.
+    alpha : float (default 0.15)
+        Alpha parameter to compute the alpha-shape that delimit the channel belt.
+
+    Returns
+    -------
+    channel_belt : ndarray
+        The approximate channel belt.
+    """
+    coarse_deposits = lithology > threshold
+    
+    channel_belt = np.empty(lithology.shape)
+    for k in range(lithology.shape[0]):
+        indices_slice = np.indices(coarse_deposits[k].shape)
+        indices_slice = indices_slice[::-1, coarse_deposits[k]]
+        alpha_shape = alphashape.alphashape(indices_slice.T, alpha)
+
+        with rasterio.Env():
+            channel_belt[k] = rasterize([alpha_shape],
+                                        out_shape=coarse_deposits[k].shape,
+                                        all_touched=True)
+            
+    return channel_belt
 
 
 ################################################################################
@@ -770,3 +821,139 @@ sand_extra_light_r = _build_sand_cmap(0.6, 0.24604133456286564, -0.4370096077612
                                       use_gold_sand=False,
                                       reverse=True,
                                       name='sand_extra_light_r')
+
+
+################################################################################
+# Fractional packing model
+
+class FractionalPackingModel:
+    """
+    Class to compute porosity and hydraulic conductivity of unconsolidated
+    sediments using the fractional packing model.
+    
+    Parameters
+    ----------
+    g : float (default 9.81)
+        Gravitational acceleration.
+    fluid_density : float (default 1000.)
+        Fluid density.
+    dynamic_viscosity : float (default 0.001)
+        Dynamic viscosity.
+
+    Attributes
+    ----------
+    porosity_ : ndarray
+        Porosity.
+    grain_size_rep_ : ndarray
+        Representative grain size.
+    hydraulic_conductivity_ : ndarray
+        Hydraulic conductivity.
+
+    References
+    ----------
+    Koltermann, C. E., & Gorelick, S. M. (1995).
+    Fractional packing model for hydraulic conductivity derived from sediment mixtures.
+    Water Resources Research, 31(12), 3283–3297. https://doi.org/10.1029/95WR02020
+    """
+    def __init__(self,
+                 g=9.81, # m.s^-2
+                 fluid_density=1000., # kg.m^-3
+                 dynamic_viscosity=0.001): # kg.m^-1.s^-1
+
+        self.g = g
+        self.fluid_density = fluid_density
+        self.dynamic_viscosity = dynamic_viscosity
+        
+    def _compute_porosity(self,
+                          porosity_coarse,
+                          porosity_fine,
+                          porosity_min,
+                          fraction_fine):
+        """
+        Computes the porosity.
+        """
+        self.porosity_ = np.full(fraction_fine.shape, np.nan)
+        y = np.full(fraction_fine.shape, np.nan)
+        y_min = 1 + porosity_fine - porosity_min/porosity_coarse
+
+        where = np.where(fraction_fine < porosity_coarse)
+        y[where] = fraction_fine[where]*(y_min - 1)/porosity_coarse + 1
+        self.porosity_[where] = porosity_coarse\
+                                - fraction_fine[where]*y[where]*(1 - porosity_fine)\
+                                + (1 - y[where])*fraction_fine[where]*porosity_fine
+
+        where = np.where(fraction_fine == porosity_coarse)
+        self.porosity_[where] = porosity_coarse*(1 - y_min)\
+                                + porosity_coarse*porosity_fine
+
+        where = np.where(fraction_fine > porosity_coarse)
+        y[where] = (fraction_fine[where] - 1)*(1 - y_min)/(1 - porosity_coarse) + 1
+        self.porosity_[where] = porosity_coarse*(1 - y[where])\
+                                + fraction_fine[where]*porosity_fine
+        
+    def _compute_representative_grain_size(self,
+                                           grain_size_coarse,
+                                           grain_size_fine,
+                                           fraction_fine,
+                                           porosity_coarse):
+        """
+        Computes the representative grain size using a combination of geometric
+        and harmonic mean between the fine and coarse fractions.
+        """
+        self.grain_size_rep_ = np.full(fraction_fine.shape, np.nan)
+        # Weighted geometric mean
+        where = np.where(fraction_fine < porosity_coarse)
+        self.grain_size_rep_[where] = np.exp(fraction_fine[where]*np.log(grain_size_fine)
+                                             + (1 - fraction_fine[where])*np.log(grain_size_coarse))
+        # Weighted harmonic mean
+        where = np.where(fraction_fine >= porosity_coarse)
+        self.grain_size_rep_[where] = 1/(fraction_fine[where]/grain_size_fine
+                                         + (1 - fraction_fine[where])/grain_size_coarse)
+        
+    def _compute_hydraulic_conductivity(self):
+        """
+        Computes the hydraulic conductivity.
+        """
+        self.hydraulic_conductivity_ = (self.fluid_density*self.g/self.dynamic_viscosity)\
+                                       *(self.grain_size_rep_**2)*(self.porosity_**3)/(180*((1 - self.porosity_)**2))
+        
+    def run(self,
+            porosity_coarse,
+            porosity_fine,
+            porosity_min,
+            fraction_fine,
+            grain_size_coarse,
+            grain_size_fine):
+        """
+        Runs the fractional packing model.
+
+        Parameters
+        ----------
+        porosity_coarse : float
+            Porosity of the coarse fraction.
+        porosity_fine : float
+            Porosity of the fine fraction.
+        porosity_min : float
+            Minimum porosity.
+        fraction_fine : ndarray
+            Fraction of fine deposits.
+        grain_size_coarse : float
+            Grain size of the coarse fraction.
+        grain_size_fine : float
+            Grain size of the fine fraction.
+        """
+        self._compute_porosity(porosity_coarse,
+                               porosity_fine,
+                               porosity_min,
+                               fraction_fine)
+        self._compute_representative_grain_size(grain_size_coarse,
+                                                grain_size_fine,
+                                                fraction_fine,
+                                                porosity_coarse)
+        self._compute_hydraulic_conductivity()
+        
+    def convert_to_permeability(self):
+        """
+        Converts the hydraulic conductivity to a permeability.
+        """
+        return self.dynamic_viscosity*self.hydraulic_conductivity_/(self.fluid_density*self.g)
