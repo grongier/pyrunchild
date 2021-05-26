@@ -1,6 +1,6 @@
 # pyrunchild
 
-pyrunchild is a Python package for running the landscape evolution model CHILD.
+pyrunchild is a Python package for running the landscape evolution model CHILD and processing its outputs.
 
 ## Installation
 
