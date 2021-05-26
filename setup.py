@@ -58,7 +58,7 @@ setup(
     long_description_content_type='text/markdown',
     url='',
     author='Guillaume Rongier',
-    license='CSIRO BSD / MIT licence',
+    license='CSIRO Open Source Software Licence v1.0',
     classifiers=[
         # See https://pypi.python.org/pypi?%3Aaction=list_classifiers
         'Development Status :: 4 - Beta',
