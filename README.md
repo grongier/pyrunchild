@@ -39,7 +39,7 @@ You can also cite pyrunchild itself:
 
 > Rongier, G. (2021) pyrunchild. v1. CSIRO. Software Collection. https://doi.org/10.25919/ez3x-rz63
 
-And here's the corresponding BibTex entry:
+And here is the corresponding BibTex entry:
 
     @misc{Rongier2021,
         author = "Rongier, Guillaume",
