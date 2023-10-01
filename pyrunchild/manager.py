@@ -137,7 +137,7 @@ class DataManager:
                 line = file.readline()
                 number_triangles = int(line.rstrip('\n'))
 
-                temp_triangles = np.empty((number_triangles, 3), dtype=np.int)
+                temp_triangles = np.empty((number_triangles, 3), dtype=int)
                 for i in range(number_triangles):
                     line = file.readline()
                     line = line.rstrip('\n').split(' ')
