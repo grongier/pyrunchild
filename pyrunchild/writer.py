@@ -2108,7 +2108,7 @@ class InputWriter(DataManager):
         if save_previous_file == True:
             rename_old_file(self.locate_input_file(realization))
 
-        with open(self.locate_input_file(realization), 'w') as input_file:
+        with open(self.locate_input_file(realization), 'w', encoding='utf-8') as input_file:
             
             self.write_header(input_file,
                               self.parameter_values[realization]['OUTFILENAME'],
